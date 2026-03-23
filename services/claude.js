@@ -15,7 +15,7 @@ function getClient() {
 // ─── Core presentation generation system prompt ────────────────────────────
 
 const PRESENTATION_FRAMEWORK = `
-/* ═══ NEXUS PRESENTATION ENGINE (embedded) ═══ */
+/* ═══ SLIDES.IQ PRESENTATION ENGINE (embedded) ═══ */
 <style id="nexus-engine-styles">
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; overflow: hidden; }
@@ -264,7 +264,7 @@ ${JSON.stringify(brand, null, 2)}
 Integriere diese Brand-Elemente konsistent in jede Präsentation.
 ` : '';
 
-  return `Du bist NEXUS — ein weltklasse AI-Präsentationsarchitekt. Du erstellst atemberaubende, vollständig eigenständige HTML-Präsentationen die Kunst und Technologie verbinden.
+  return `Du bist Slides.IQ — ein weltklasse AI-Präsentationsarchitekt. Du erstellst atemberaubende, vollständig eigenständige HTML-Präsentationen die Kunst und Technologie verbinden.
 
 ${templateSystemPrompt}
 

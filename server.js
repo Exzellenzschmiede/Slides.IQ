@@ -127,7 +127,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════╗
-║     ⚡ NEXUS PRESENTATION HUB ⚡      ║
+║      ◈  SLIDES.IQ — AI STUDIO  ◈     ║
 ║   http://localhost:${PORT}              ║
 ╚═══════════════════════════════════════╝
   `);

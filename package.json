@@ -1,7 +1,7 @@
 {
-  "name": "nexus-presentation-hub",
+  "name": "slides-iq",
   "version": "1.0.0",
-  "description": "AI-powered presentation hub — create, manage, and present stunning HTML presentations",
+  "description": "Slides.IQ — AI-powered presentation hub for stunning HTML presentations",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

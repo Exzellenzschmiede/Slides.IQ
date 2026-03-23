@@ -14,7 +14,7 @@ export async function renderSettings(container) {
     <div class="view-header">
       <div>
         <h1 class="view-title">Einstellungen</h1>
-        <p class="view-subtitle">Nexus konfigurieren und Brand Identity festlegen</p>
+        <p class="view-subtitle">Slides.IQ konfigurieren und Brand Identity festlegen</p>
       </div>
       <button class="btn btn-primary" id="save-settings-btn">Speichern</button>
     </div>
@@ -44,7 +44,7 @@ export async function renderSettings(container) {
       <div class="card">
         <div class="form-group">
           <label class="form-label">Firmen-/Projektname</label>
-          <input type="text" class="form-input" id="brand-name" value="${brand.name || ''}" placeholder="Nexus Corp">
+          <input type="text" class="form-input" id="brand-name" value="${brand.name || ''}" placeholder="Slides.IQ">
         </div>
         <div class="form-group">
           <label class="form-label">Primärfarbe</label>
