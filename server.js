@@ -67,6 +67,29 @@ app.use('/api/presentations', presentationsRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api/ai', aiLimiter, aiRouter);
 
+// ─── Framework Migration ───────────────────────────────────────────────────
+
+app.post('/api/admin/migrate-frameworks', (req, res) => {
+  const db = require('./database');
+  const { injectFramework } = require('./services/claude');
+
+  const rows = db.prepare(
+    'SELECT id, title, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ""'
+  ).all();
+
+  const results = [];
+  for (const row of rows) {
+    const fixedHtml = injectFramework(row.html_content);
+    const slideCount = (fixedHtml.match(/class="slide(?:\s|")/g) || []).length;
+    db.prepare(
+      'UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime("now") WHERE id = ?'
+    ).run(fixedHtml, slideCount, row.id);
+    results.push({ id: row.id, title: row.title, slide_count: slideCount });
+  }
+
+  res.json({ migrated: results.length, results });
+});
+
 // ─── Public presentation view ─────────────────────────────────────────────
 
 app.get('/view/:token', (req, res) => {
