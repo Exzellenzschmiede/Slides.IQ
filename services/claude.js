@@ -15,7 +15,7 @@ function getClient() {
 // ─── Core presentation generation system prompt ────────────────────────────
 
 const PRESENTATION_FRAMEWORK = `
-/* ═══ NEXUS PRESENTATION ENGINE (embedded) ═══ */
+/* ═══ SLIDES.IQ PRESENTATION ENGINE (embedded) ═══ */
 <style id="nexus-engine-styles">
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; overflow: hidden; }
@@ -24,21 +24,24 @@ body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var
 #nexus-presentation {
   position: fixed; inset: 0; overflow: hidden;
 }
-.slide {
-  position: absolute; inset: 0;
+
+/* High-specificity rules so Claude's generated CSS cannot override show/hide */
+#nexus-presentation .slide {
+  position: absolute !important; inset: 0 !important;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none;
-  transform: translateX(60px) scale(0.97);
+  opacity: 0 !important; pointer-events: none !important;
+  transform: translateX(60px) scale(0.97) !important;
   transition: opacity 0.5s cubic-bezier(0.4,0,0.2,1), transform 0.5s cubic-bezier(0.4,0,0.2,1);
-  padding: 4rem;
+  padding: 4rem; overflow: hidden;
 }
-.slide.active {
-  opacity: 1; pointer-events: all;
-  transform: translateX(0) scale(1);
+#nexus-presentation .slide.active {
+  opacity: 1 !important; pointer-events: all !important;
+  transform: translateX(0) scale(1) !important;
+  z-index: 1;
 }
-.slide.prev {
-  opacity: 0; pointer-events: none;
-  transform: translateX(-60px) scale(0.97);
+#nexus-presentation .slide.prev {
+  opacity: 0 !important; pointer-events: none !important;
+  transform: translateX(-60px) scale(0.97) !important;
 }
 .slide.overview-item {
   position: static !important;
@@ -129,7 +132,9 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
 
 <script>
 (function() {
-  const slides = Array.from(document.querySelectorAll('#nexus-presentation .slide'));
+  // Find slides — try scoped first, fall back to global search
+  let slides = Array.from(document.querySelectorAll('#nexus-presentation .slide'));
+  if (!slides.length) slides = Array.from(document.querySelectorAll('.slide'));
   let current = 0;
 
   function goto(n, skipAnimation) {
@@ -264,7 +269,7 @@ ${JSON.stringify(brand, null, 2)}
 Integriere diese Brand-Elemente konsistent in jede Präsentation.
 ` : '';
 
-  return `Du bist NEXUS — ein weltklasse AI-Präsentationsarchitekt. Du erstellst atemberaubende, vollständig eigenständige HTML-Präsentationen die Kunst und Technologie verbinden.
+  return `Du bist Slides.IQ — ein weltklasse AI-Präsentationsarchitekt. Du erstellst atemberaubende, vollständig eigenständige HTML-Präsentationen die Kunst und Technologie verbinden.
 
 ${templateSystemPrompt}
 
@@ -272,33 +277,51 @@ ${brandSection}
 
 ## TECHNISCHE ANFORDERUNGEN
 
-### HTML-Struktur (PFLICHT):
-\`\`\`html
+### HTML-Struktur — EXAKT SO (keine Abweichungen):
+
+KRITISCHE REGELN:
+1. Jede Slide ist ein direktes Kind-Element von <div id="nexus-presentation">
+2. Jede Slide hat GENAU class="slide" (erste zusätzlich class="slide active")
+3. Das Navigations-Framework wird automatisch injiziert — du musst NICHTS dafür tun
+4. KEIN eigenes JavaScript für Navigation/Slideshow schreiben
+5. KEINE eigene Show/Hide-Logik für Slides
+
+Minimales Grundgerüst:
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>[Präsentationstitel]</title>
-  <style>/* Deine kompletten Styles hier */</style>
+  <title>Titel</title>
+  <style>
+    /* Dein komplettes CSS hier — ABER NICHT: position/opacity/transform für .slide */
+    :root { --primary: #7c3aed; --accent: #06b6d4; --bg: #05070f; }
+    body { margin: 0; background: var(--bg); }
+    /* Slide-Inhalte stylen, aber nicht die Slides selbst positionieren */
+    .slide-content { width: 100%; max-width: 1100px; }
+  </style>
 </head>
 <body>
   <div id="nexus-presentation">
-    <div class="slide active" data-notes="[Speaker Notes für Slide 1]">
-      <!-- Slide 1 Inhalt -->
-    </div>
-    <div class="slide" data-notes="[Speaker Notes für Slide 2]">
-      <!-- Slide 2 Inhalt -->
-    </div>
-    <!-- Weitere Slides... -->
-  </div>
 
-  [NEXUS_FRAMEWORK]
+    <div class="slide active" data-notes="Speaker Notes Slide 1">
+      <div class="slide-content">
+        <!-- Inhalt Slide 1 -->
+      </div>
+    </div>
+
+    <div class="slide" data-notes="Speaker Notes Slide 2">
+      <div class="slide-content">
+        <!-- Inhalt Slide 2 -->
+      </div>
+    </div>
+
+    <!-- Weitere Slides mit class="slide" ... -->
+
+  </div>
 </body>
 </html>
-\`\`\`
-
-Der Platzhalter [NEXUS_FRAMEWORK] wird automatisch durch das Navigation-Framework ersetzt.
 
 ### Slide-Typen die du variieren sollst:
 1. **Title Slide** — Großes Impact-Opening, Name + Tagline
@@ -375,8 +398,25 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
   return finalHtml;
 }
 
-function injectFramework(html) {
-  return html.replace('[NEXUS_FRAMEWORK]', PRESENTATION_FRAMEWORK);
+function injectFramework(rawHtml) {
+  let html = rawHtml.trim();
+
+  // Strip markdown code fences Claude sometimes adds despite instructions
+  if (html.startsWith('```')) {
+    html = html.replace(/^```(?:html)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+  }
+
+  // Remove the placeholder if present (it will be re-injected properly below)
+  html = html.replace(/\[NEXUS_FRAMEWORK\]/g, '');
+
+  // Always inject the framework before </body> — reliable regardless of Claude's output
+  if (html.includes('</body>')) {
+    html = html.replace('</body>', PRESENTATION_FRAMEWORK + '\n</body>');
+  } else {
+    html = html + '\n' + PRESENTATION_FRAMEWORK;
+  }
+
+  return html;
 }
 
 // ─── Narrative Arc Analysis ────────────────────────────────────────────────
