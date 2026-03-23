@@ -529,5 +529,6 @@ module.exports = {
   analyzeNarrativeArc,
   suggestImprovements,
   injectFramework,
+  stripFramework,
   PRESENTATION_FRAMEWORK
 };
