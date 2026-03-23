@@ -1,0 +1,107 @@
+// ─── Nexus API Client ─────────────────────────────────────────────────────
+
+const API_BASE = '/api';
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(API_BASE + path, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+    body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+
+  const contentType = res.headers.get('Content-Type') || '';
+  if (contentType.includes('application/json')) return res.json();
+  if (contentType.includes('application/pdf')) return res.blob();
+  return res.text();
+}
+
+// ─── Presentations ─────────────────────────────────────────────────────────
+
+export const api = {
+  presentations: {
+    list: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return apiFetch(`/presentations${qs ? '?' + qs : ''}`);
+    },
+    get: (id) => apiFetch(`/presentations/${id}`),
+    create: (data) => apiFetch('/presentations', { method: 'POST', body: data }),
+    update: (id, data) => apiFetch(`/presentations/${id}`, { method: 'PUT', body: data }),
+    delete: (id) => apiFetch(`/presentations/${id}`, { method: 'DELETE' }),
+    share: (id) => apiFetch(`/presentations/${id}/share`, { method: 'POST' }),
+    unshare: (id) => apiFetch(`/presentations/${id}/share`, { method: 'DELETE' }),
+    exportPdf: (id) => apiFetch(`/presentations/${id}/export/pdf`),
+    exportHtml: async (id, title) => {
+      const res = await fetch(`${API_BASE}/presentations/${id}/export/html`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${title || 'presentation'}.html`;
+      a.click(); URL.revokeObjectURL(url);
+    },
+    restoreVersion: (id, versionId) => apiFetch(`/presentations/${id}/restore/${versionId}`, { method: 'POST' })
+  },
+
+  templates: {
+    list: () => apiFetch('/templates'),
+    get: (id) => apiFetch(`/templates/${id}`),
+    create: (data) => apiFetch('/templates', { method: 'POST', body: data }),
+    update: (id, data) => apiFetch(`/templates/${id}`, { method: 'PUT', body: data }),
+    delete: (id) => apiFetch(`/templates/${id}`, { method: 'DELETE' })
+  },
+
+  slideLibrary: {
+    list: () => apiFetch('/slide-library')
+  },
+
+  ai: {
+    status: () => apiFetch('/ai/status'),
+    analyze: (id) => apiFetch(`/ai/analyze/${id}`, { method: 'POST' }),
+    suggest: (id, focusArea) => apiFetch(`/ai/suggest/${id}`, { method: 'POST', body: { focusArea } }),
+
+    // Streaming generation - returns AsyncGenerator
+    generate: async function* (presentationId, prompt) {
+      const res = await fetch(`${API_BASE}/ai/generate/${presentationId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              yield data;
+            } catch {}
+          }
+        }
+      }
+    }
+  },
+
+  settings: {
+    get: () => apiFetch('/settings'),
+    update: (data) => apiFetch('/settings', { method: 'PUT', body: data })
+  }
+};
