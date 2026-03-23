@@ -61,6 +61,24 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_presentations_share ON presentations(share_token);
 `);
 
+// Schema migrations — add columns that may be missing in older DB instances
+// SQLite has no ADD COLUMN IF NOT EXISTS, so we catch the "duplicate column" error
+const presentationMigrations = [
+  "ALTER TABLE presentations ADD COLUMN html_content TEXT",
+  "ALTER TABLE presentations ADD COLUMN slide_count INTEGER DEFAULT 0",
+  "ALTER TABLE presentations ADD COLUMN conversation TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE presentations ADD COLUMN versions TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE presentations ADD COLUMN share_token TEXT",
+  "ALTER TABLE presentations ADD COLUMN view_count INTEGER DEFAULT 0",
+  "ALTER TABLE presentations ADD COLUMN tags TEXT DEFAULT '[]'",
+  "ALTER TABLE presentations ADD COLUMN brand TEXT DEFAULT '{}'",
+  "ALTER TABLE presentations ADD COLUMN description TEXT",
+  "ALTER TABLE presentations ADD COLUMN template_id TEXT",
+];
+for (const sql of presentationMigrations) {
+  try { db.exec(sql); } catch (_) { /* column already exists */ }
+}
+
 // Seed default templates
 const templateCount = db.prepare('SELECT COUNT(*) as c FROM templates').get();
 if (templateCount.c === 0) {
