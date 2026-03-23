@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { navigate } from '../router.js';
 import { showModal, closeModal } from '../components/modal.js';
 import { toastSuccess, toastError, toastInfo } from '../components/toast.js';
+import { openSlideEditor } from './slideEditor.js';
 
 let currentPresentation = null;
 let isGenerating = false;
@@ -50,6 +51,7 @@ function buildStudioHTML(p) {
       ${p.html_content ? `
         <button class="btn btn-ghost btn-sm" id="btn-present">▶ Präsentieren</button>
         <button class="btn btn-ghost btn-sm" id="btn-presenter-mode">⊞ Presenter</button>
+        <button class="btn btn-ghost btn-sm" id="btn-edit-slides">✏ Bearbeiten</button>
         <button class="btn btn-ghost btn-sm" id="btn-analyze">◎ Analyse</button>
       ` : ''}
       <button class="btn btn-ghost btn-sm" id="btn-versions">⏱ Versionen</button>
@@ -224,6 +226,16 @@ function bindEvents() {
 
   // Presenter mode
   document.getElementById('btn-presenter-mode')?.addEventListener('click', openPresenterMode);
+
+  // WYSIWYG slide editor
+  document.getElementById('btn-edit-slides')?.addEventListener('click', () => {
+    openSlideEditor(currentPresentation, async (newHtml) => {
+      currentPresentation = await api.presentations.get(currentPresentation.id);
+      loadPreview();
+      document.getElementById('studio-meta').textContent =
+        `${currentPresentation.slide_count} Slides · gerade bearbeitet`;
+    });
+  });
 
   // Analyze
   document.getElementById('btn-analyze')?.addEventListener('click', showAnalysis);
