@@ -40,12 +40,12 @@ router.post('/generate/:presentationId', async (req, res) => {
   try {
     send({ type: 'start' });
 
-    let fullHtml = '';
+    let streamedText = '';
 
-    await generatePresentation(
+    const fullHtml = await generatePresentation(
       { prompt, conversation, templateSystemPrompt, brand },
       (chunk) => {
-        fullHtml += chunk;
+        streamedText += chunk;
         send({ type: 'chunk', text: chunk });
       }
     );
