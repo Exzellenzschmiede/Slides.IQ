@@ -61,7 +61,7 @@ jobs:
           script: |
             set -e
 
-            cd /home/user/Presentations
+            cd /home/deploy/Presentations
 
             echo "→ Pull latest code..."
             git pull origin main
