@@ -23,8 +23,10 @@ function parsePresentation(row) {
 
 function countSlides(html) {
   if (!html) return 0;
-  const matches = html.match(/class="slide/g);
-  return matches ? matches.length : 0;
+  // Match only standalone class="slide" or class="slide active" — not class="slide-content" etc.
+  const matches = html.match(/class="slide(?:\s+[^"]*)?"/g);
+  if (!matches) return 0;
+  return matches.filter(m => /class="slide(\s|")/.test(m)).length;
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────

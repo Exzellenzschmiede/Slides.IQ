@@ -57,8 +57,8 @@ router.post('/generate/:presentationId', async (req, res) => {
       { role: 'assistant', content: fullHtml }
     ].slice(-20); // keep last 20 messages
 
-    // Count slides
-    const slideCount = (fullHtml.match(/class="slide/g) || []).length;
+    // Count slides — only match class="slide" and class="slide active", not class="slide-content" etc.
+    const slideCount = (fullHtml.match(/class="slide(?:\s|")/g) || []).length;
 
     // Save version if content existed
     let versions = JSON.parse(row.versions || '[]');
