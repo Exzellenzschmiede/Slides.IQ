@@ -20,7 +20,7 @@ if (DRY_RUN) {
 }
 
 const rows = db.prepare(
-  'SELECT id, title, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ""'
+  "SELECT id, title, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ''"
 ).all();
 
 console.log(`📦 ${rows.length} Präsentation(en) gefunden\n`);
