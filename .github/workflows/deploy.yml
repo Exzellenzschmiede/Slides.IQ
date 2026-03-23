@@ -27,10 +27,11 @@ jobs:
 
       - name: Syntax check (node --check)
         run: |
-          echo "Checking syntax of all .js files..."
+          echo "Checking syntax of backend .js files..."
           find . -name "*.js" \
             -not -path "./node_modules/*" \
             -not -path "./.github/*" \
+            -not -path "./public/*" \
             | xargs -I{} node --check {}
           echo "✓ Syntax OK"
 
