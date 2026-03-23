@@ -68,6 +68,7 @@ jobs:
             --exclude='.git' \
             --exclude='.github' \
             --exclude='node_modules' \
+            --exclude='.env' \
             -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.VPS_PORT || '22' }}" \
             ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/Presentations/
 
