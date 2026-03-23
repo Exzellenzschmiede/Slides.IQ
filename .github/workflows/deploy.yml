@@ -1,0 +1,78 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ─── Job 1: Checks ────────────────────────────────────────────────────────
+  ci:
+    name: CI Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check (node --check)
+        run: |
+          echo "Checking syntax of all .js files..."
+          find . -name "*.js" \
+            -not -path "./node_modules/*" \
+            -not -path "./.github/*" \
+            | xargs -I{} node --check {}
+          echo "✓ Syntax OK"
+
+      - name: Security audit (npm audit)
+        run: npm audit --audit-level=high
+
+      - name: Docker build test
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false   # nur bauen, nicht pushen
+
+  # ─── Job 2: Deploy (nur wenn CI grün) ────────────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: ci   # blockiert bis ci erfolgreich
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+
+            cd /opt/Presentations
+
+            echo "→ Pull latest code..."
+            git pull origin main
+
+            echo "→ Build & restart containers..."
+            docker compose up -d --build --remove-orphans
+
+            echo "→ Migrate presentation frameworks..."
+            docker compose exec -T nexus node scripts/migrate-presentations.js || true
+
+            echo "→ Cleanup unused Docker images..."
+            docker image prune -f
+
+            echo "✅ Deployment abgeschlossen"
