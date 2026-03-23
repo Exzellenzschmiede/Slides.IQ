@@ -14,7 +14,10 @@ function getClient() {
 
 // ─── Core presentation generation system prompt ────────────────────────────
 
-const PRESENTATION_FRAMEWORK = `
+const FRAMEWORK_START = '<!-- SLIDESIQ:FRAMEWORK:START -->';
+const FRAMEWORK_END   = '<!-- SLIDESIQ:FRAMEWORK:END -->';
+
+const PRESENTATION_FRAMEWORK = `${FRAMEWORK_START}
 /* ═══ SLIDES.IQ PRESENTATION ENGINE (embedded) ═══ */
 <style id="nexus-engine-styles">
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -258,6 +261,7 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
   goto(0);
 })();
 </script>
+${FRAMEWORK_END}
 `;
 
 // ─── System prompt builder ────────────────────────────────────────────────
@@ -398,6 +402,35 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
   return finalHtml;
 }
 
+function stripFramework(html) {
+  // Remove new-style marked framework
+  if (html.includes(FRAMEWORK_START)) {
+    const start = html.indexOf(FRAMEWORK_START);
+    const end   = html.indexOf(FRAMEWORK_END);
+    if (end !== -1) {
+      return html.slice(0, start) + html.slice(end + FRAMEWORK_END.length);
+    }
+    return html.slice(0, start);
+  }
+
+  // Remove old-style unmarked framework (identified by the unique style tag id)
+  const styleTag = '<style id="nexus-engine-styles">';
+  if (html.includes(styleTag)) {
+    // The framework is always the last block before </body>; strip from style tag to </body>
+    const start = html.indexOf(styleTag);
+    // Walk back to catch the preceding comment line if present
+    const lineStart = html.lastIndexOf('\n', start);
+    const cutFrom = lineStart !== -1 ? lineStart : start;
+    const bodyClose = html.lastIndexOf('</body>');
+    if (bodyClose !== -1 && bodyClose > start) {
+      return html.slice(0, cutFrom) + '\n</body>' + html.slice(bodyClose + 7);
+    }
+    return html.slice(0, cutFrom);
+  }
+
+  return html;
+}
+
 function injectFramework(rawHtml) {
   let html = rawHtml.trim();
 
@@ -406,18 +439,21 @@ function injectFramework(rawHtml) {
     html = html.replace(/^```(?:html)?\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
   }
 
-  // Remove the placeholder if present (it will be re-injected properly below)
+  // Remove any placeholder text and any existing framework version
   html = html.replace(/\[NEXUS_FRAMEWORK\]/g, '');
+  html = stripFramework(html);
 
-  // Always inject the framework before </body> — reliable regardless of Claude's output
+  // Always inject the current framework before </body>
   if (html.includes('</body>')) {
-    html = html.replace('</body>', PRESENTATION_FRAMEWORK + '\n</body>');
+    html = html.replace('</body>', '\n' + PRESENTATION_FRAMEWORK + '\n</body>');
   } else {
     html = html + '\n' + PRESENTATION_FRAMEWORK;
   }
 
   return html;
 }
+
+module.exports.stripFramework = stripFramework;
 
 // ─── Narrative Arc Analysis ────────────────────────────────────────────────
 
