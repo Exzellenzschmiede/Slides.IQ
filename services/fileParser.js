@@ -29,18 +29,19 @@ async function parseFile(buffer, mimeType, filename) {
 
   // ── CSV ───────────────────────────────────────────────────────────────
   if (ext === '.csv' || mimeType === 'text/csv') {
-    const { read, utils } = require('xlsx');
-    const wb = read(buffer, { type: 'buffer' });
-    return { type: 'text', name, content: workbookToText(wb, utils) };
+    return { type: 'text', name, content: parseCsv(buffer.toString('utf8')) };
   }
 
   // ── Excel ─────────────────────────────────────────────────────────────
-  if (['.xlsx', '.xls', '.xlsm', '.xlsb'].includes(ext) ||
-      mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      mimeType === 'application/vnd.ms-excel') {
-    const { read, utils } = require('xlsx');
-    const wb = read(buffer, { type: 'buffer' });
-    return { type: 'text', name, content: workbookToText(wb, utils) };
+  if (['.xlsx', '.xlsm'].includes(ext) ||
+      mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    return { type: 'text', name, content: excelToText(wb) };
+  }
+  if (['.xls', '.xlsb'].includes(ext) || mimeType === 'application/vnd.ms-excel') {
+    throw new Error('Das Format .xls/.xlsb wird nicht mehr unterstützt. Bitte als .xlsx speichern.');
   }
 
   // ── Word DOCX ─────────────────────────────────────────────────────────
@@ -74,19 +75,37 @@ async function parseFile(buffer, mimeType, filename) {
   throw new Error(`Nicht unterstützter Dateityp: ${ext || mimeType}`);
 }
 
-// ─── Excel workbook → Markdown-style tables ───────────────────────────────
+// ─── ExcelJS workbook → Markdown-style tables ────────────────────────────
 
-function workbookToText(wb, utils) {
+function excelToText(wb) {
   const parts = [];
-  for (const sheetName of wb.SheetNames) {
-    const sheet = wb.Sheets[sheetName];
-    const rows  = utils.sheet_to_json(sheet, { header: 1, defval: '' });
-    if (rows.length === 0) continue;
-    parts.push(`## Tabelle: ${sheetName}`);
-    for (const row of rows) {
-      const line = row.map(c => String(c ?? '')).join(' | ');
+  wb.eachSheet(sheet => {
+    parts.push(`## Tabelle: ${sheet.name}`);
+    sheet.eachRow(row => {
+      const line = row.values.slice(1).map(c => String(c ?? '')).join(' | ');
       if (line.replace(/\|/g, '').trim()) parts.push(line);
+    });
+  });
+  return parts.join('\n');
+}
+
+// ─── Native CSV parser (handles quoted fields) ────────────────────────────
+
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/);
+  const parts = [];
+  for (const line of lines) {
+    const cells = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { cells.push(cur.trim()); cur = ''; }
+      else { cur += line[i]; }
     }
+    cells.push(cur.trim());
+    const row = cells.join(' | ');
+    if (row.replace(/\|/g, '').trim()) parts.push(row);
   }
   return parts.join('\n');
 }
