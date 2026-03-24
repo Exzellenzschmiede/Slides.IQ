@@ -64,12 +64,23 @@ export const api = {
     analyze: (id) => apiFetch(`/ai/analyze/${id}`, { method: 'POST' }),
     suggest: (id, focusArea) => apiFetch(`/ai/suggest/${id}`, { method: 'POST', body: { focusArea } }),
 
+    upload: async (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${API_BASE}/ai/upload`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+
     // Streaming generation - returns AsyncGenerator
-    generate: async function* (presentationId, prompt) {
+    generate: async function* (presentationId, prompt, attachments = []) {
       const res = await fetch(`${API_BASE}/ai/generate/${presentationId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, attachments })
       });
 
       if (!res.ok) {
