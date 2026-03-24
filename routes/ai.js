@@ -1,15 +1,39 @@
 'use strict';
 
 const express = require('express');
+const multer  = require('multer');
 const db = require('../database');
 const { generatePresentation, analyzeNarrativeArc, suggestImprovements } = require('../services/claude');
+const { parseFile } = require('../services/fileParser');
 
 const router = express.Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB per file
+});
+
+// ─── File upload + extraction ─────────────────────────────────────────────
+
+router.post('/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+
+  try {
+    const result = await parseFile(req.file.buffer, req.file.mimetype, req.file.originalname);
+    // Trim very large text documents to keep request sizes manageable
+    if (result.type === 'text' && result.content.length > 50000) {
+      result.content = result.content.substring(0, 50000) + '\n\n[… Inhalt gekürzt]';
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 // ─── Generate / Update presentation via AI (streaming SSE) ────────────────
 
 router.post('/generate/:presentationId', async (req, res) => {
-  const { prompt, save_version = true } = req.body;
+  const { prompt, save_version = true, attachments = [] } = req.body;
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
@@ -43,7 +67,7 @@ router.post('/generate/:presentationId', async (req, res) => {
     let streamedText = '';
 
     const fullHtml = await generatePresentation(
-      { prompt, conversation, templateSystemPrompt, brand },
+      { prompt, conversation, templateSystemPrompt, brand, attachments },
       (chunk) => {
         streamedText += chunk;
         send({ type: 'chunk', text: chunk });
@@ -51,9 +75,12 @@ router.post('/generate/:presentationId', async (req, res) => {
     );
 
     // Update conversation history
+    const attachmentNote = attachments.length
+      ? ` [Anhänge: ${attachments.map(a => a.name).join(', ')}]`
+      : '';
     const newConversation = [
       ...conversation,
-      { role: 'user', content: prompt },
+      { role: 'user', content: prompt + attachmentNote },
       { role: 'assistant', content: fullHtml }
     ].slice(-20); // keep last 20 messages
 

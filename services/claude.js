@@ -372,13 +372,41 @@ Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, k
 
 // ─── Generation with streaming ────────────────────────────────────────────
 
-async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand }, onChunk) {
+async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [] }, onChunk) {
   const anthropic = getClient();
   const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, brand);
 
+  // Build content for the new user message
+  let userContent;
+  if (attachments.length > 0) {
+    const blocks = [];
+
+    // Image attachments → vision blocks
+    for (const att of attachments.filter(a => a.type === 'image')) {
+      blocks.push({
+        type: 'image',
+        source: { type: 'base64', media_type: att.mediaType, data: att.data },
+      });
+    }
+
+    // Text attachments → prepend as context
+    const textAtts = attachments.filter(a => a.type === 'text');
+    let contextPrefix = '';
+    if (textAtts.length > 0) {
+      contextPrefix = '## Hochgeladene Dokumente als Quelldaten:\n\n' +
+        textAtts.map(a => `### ${a.name}\n${a.content}`).join('\n\n---\n\n') +
+        '\n\n---\n\n## Aufgabe:\n';
+    }
+
+    blocks.push({ type: 'text', text: contextPrefix + prompt });
+    userContent = blocks;
+  } else {
+    userContent = prompt;
+  }
+
   const messages = [
     ...conversation.map(m => ({ role: m.role, content: m.content })),
-    { role: 'user', content: prompt }
+    { role: 'user', content: userContent }
   ];
 
   let fullContent = '';

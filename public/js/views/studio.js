@@ -10,6 +10,7 @@ let currentPresentation = null;
 let isGenerating = false;
 let presenterTimerInterval = null;
 let presenterSeconds = 0;
+let pendingAttachments = []; // [{type, name, content?, data?, mediaType?}]
 
 const QUICK_PROMPTS = [
   'Mache die Präsentation visuell beeindruckender',
@@ -109,7 +110,9 @@ function buildStudioHTML(p) {
         </div>
 
         <div class="chat-input-area">
+          <div id="attachment-chips" class="attachment-chips"></div>
           <div class="chat-input-wrapper">
+            <button class="attach-btn" id="attach-btn" title="Datei anhängen (PDF, Word, Excel, PowerPoint, Bilder…)">📎</button>
             <textarea
               class="chat-input" id="chat-input"
               placeholder="Beschreibe deine Präsentation…&#10;Shift+Enter für Zeilenumbruch"
@@ -117,6 +120,9 @@ function buildStudioHTML(p) {
             ></textarea>
             <button class="send-btn" id="send-btn" title="Senden (Enter)">→</button>
           </div>
+          <input type="file" id="file-input" multiple
+            accept=".pdf,.docx,.xlsx,.xls,.csv,.pptx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp"
+            style="display:none">
         </div>
       </div>
 
@@ -217,6 +223,19 @@ function bindEvents() {
     });
   });
 
+  // File attachment
+  document.getElementById('attach-btn')?.addEventListener('click', () => {
+    document.getElementById('file-input')?.click();
+  });
+
+  document.getElementById('file-input')?.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // Reset so same file can be re-selected
+    for (const file of files) {
+      await uploadAttachment(file);
+    }
+  });
+
   // Present button
   document.getElementById('btn-present')?.addEventListener('click', () => {
     if (!currentPresentation.html_content) return;
@@ -277,11 +296,71 @@ function bindEvents() {
   });
 }
 
+async function uploadAttachment(file) {
+  const chipId = `chip-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  addAttachmentChip(chipId, file.name, true);
+  try {
+    const result = await api.ai.upload(file);
+    pendingAttachments.push(result);
+    updateAttachmentChip(chipId, file.name, false);
+  } catch (err) {
+    removeAttachmentChip(chipId);
+    toastError(`Upload fehlgeschlagen: ${err.message}`);
+  }
+}
+
+function addAttachmentChip(id, name, loading) {
+  const chips = document.getElementById('attachment-chips');
+  if (!chips) return;
+  const chip = document.createElement('div');
+  chip.className = 'attachment-chip' + (loading ? ' loading' : '');
+  chip.id = id;
+  const icon = name.match(/\.(png|jpe?g|gif|webp)$/i) ? '🖼' :
+               name.match(/\.pdf$/i) ? '📄' :
+               name.match(/\.docx?$/i) ? '📝' :
+               name.match(/\.xlsx?|\.csv$/i) ? '📊' :
+               name.match(/\.pptx?$/i) ? '📑' : '📎';
+  chip.innerHTML = `
+    <span class="chip-icon">${loading ? '⏳' : icon}</span>
+    <span class="chip-name">${escHtml(name)}</span>
+    <button class="chip-remove" data-chip="${id}" title="Entfernen">✕</button>
+  `;
+  chip.querySelector('.chip-remove').addEventListener('click', () => {
+    const idx = pendingAttachments.findIndex(a => a.name === name);
+    if (idx !== -1) pendingAttachments.splice(idx, 1);
+    removeAttachmentChip(id);
+  });
+  chips.appendChild(chip);
+}
+
+function updateAttachmentChip(id, name, loading) {
+  const chip = document.getElementById(id);
+  if (!chip) return;
+  chip.classList.toggle('loading', loading);
+  const icon = chip.querySelector('.chip-icon');
+  if (icon) icon.textContent = name.match(/\.(png|jpe?g|gif|webp)$/i) ? '🖼' :
+    name.match(/\.pdf$/i) ? '📄' : name.match(/\.docx?$/i) ? '📝' :
+    name.match(/\.xlsx?|\.csv$/i) ? '📊' : name.match(/\.pptx?$/i) ? '📑' : '📎';
+}
+
+function removeAttachmentChip(id) {
+  document.getElementById(id)?.remove();
+}
+
+function clearAttachments() {
+  pendingAttachments = [];
+  const chips = document.getElementById('attachment-chips');
+  if (chips) chips.innerHTML = '';
+}
+
 async function sendMessage() {
   if (isGenerating) return;
   const input = document.getElementById('chat-input');
   const prompt = input?.value.trim();
   if (!prompt) return;
+
+  const attachments = [...pendingAttachments];
+  clearAttachments();
 
   isGenerating = true;
   input.value = '';
@@ -289,7 +368,10 @@ async function sendMessage() {
   document.getElementById('send-btn').disabled = true;
 
   // Add user message to chat
-  addChatMessage('user', prompt);
+  const attachmentLabel = attachments.length
+    ? `\n📎 ${attachments.map(a => a.name).join(', ')}`
+    : '';
+  addChatMessage('user', prompt + attachmentLabel);
 
   // Show generating indicator
   document.getElementById('generating-indicator').style.display = 'block';
@@ -303,7 +385,7 @@ async function sendMessage() {
   let generatedHtml = '';
 
   try {
-    for await (const event of api.ai.generate(currentPresentation.id, prompt)) {
+    for await (const event of api.ai.generate(currentPresentation.id, prompt, attachments)) {
       if (event.type === 'chunk') {
         charCount += event.text.length;
         generatedHtml += event.text;
