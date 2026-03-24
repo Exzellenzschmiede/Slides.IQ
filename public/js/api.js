@@ -43,7 +43,8 @@ export const api = {
       a.href = url; a.download = `${title || 'presentation'}.html`;
       a.click(); URL.revokeObjectURL(url);
     },
-    restoreVersion: (id, versionId) => apiFetch(`/presentations/${id}/restore/${versionId}`, { method: 'POST' })
+    restoreVersion: (id, versionId) => apiFetch(`/presentations/${id}/restore/${versionId}`, { method: 'POST' }),
+    updateContent: (id, data) => apiFetch(`/presentations/${id}/content`, { method: 'PUT', body: data })
   },
 
   templates: {

@@ -908,6 +908,259 @@ html, body {
 .full-width { width: 100%; }
 .text-center { text-align: center; }
 
+/* ─── Slide WYSIWYG Editor Overlay ───────────────────────────────────── */
+
+#slide-editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.se-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.se-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.se-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.se-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.se-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.se-tool {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  min-width: 28px;
+  text-align: center;
+  transition: all var(--transition);
+}
+
+.se-tool:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--primary);
+}
+
+.se-color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.se-color-wrap input[type="color"] {
+  width: 20px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.se-select {
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.se-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+.se-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.se-dirty {
+  display: none;
+  font-size: 12px;
+  color: var(--warning);
+}
+
+.se-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Slide list (left) */
+.se-slide-list {
+  width: 190px;
+  flex-shrink: 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.se-slide-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all var(--transition);
+}
+
+.se-slide-item:hover { background: var(--bg-card-hover); }
+
+.se-slide-item.active {
+  background: rgba(124,58,237,0.15);
+  border-left-color: var(--primary);
+}
+
+.se-slide-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.se-slide-item.active .se-slide-num {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.se-slide-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.se-slide-item.active .se-slide-title { color: var(--text); }
+
+/* Center editor area */
+.se-editor-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a14;
+  overflow: hidden;
+}
+
+.se-editor-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: hidden;
+}
+
+#se-iframe {
+  width: 100%;
+  max-width: min(calc(100% - 40px), calc((100vh - 180px) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: #000;
+  transition: border-color var(--transition);
+}
+
+#se-iframe:focus-within { border-color: var(--primary); }
+
+.se-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Notes panel (right) */
+.se-notes-panel {
+  width: 230px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.se-notes-input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 10px;
+  font-size: 13px;
+  font-family: var(--font);
+  resize: none;
+  line-height: 1.5;
+  min-height: 120px;
+}
+
+.se-notes-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 /* ─── QR Code Modal ───────────────────────────────────────────────────── */
 
 .qr-container {
