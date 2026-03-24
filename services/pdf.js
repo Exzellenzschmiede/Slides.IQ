@@ -37,7 +37,7 @@ async function exportPdf(htmlContent, options = {}) {
     await page.goto(`file://${tmpFile}`, { waitUntil: 'networkidle0', timeout: 30000 });
 
     // Wait for animations to settle
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
 
     // Get all slides and render each as a page
     const slides = await page.$$('.slide');
@@ -62,7 +62,7 @@ async function exportPdf(htmlContent, options = {}) {
         if (overview) overview.style.display = 'none';
       }, i);
 
-      await page.waitForTimeout(100);
+      await new Promise(r => setTimeout(r, 100));
 
       const pdf = await page.pdf({
         format,
@@ -152,7 +152,7 @@ async function exportSlideImages(htmlContent) {
         });
       }, i);
 
-      await page.waitForTimeout(200);
+      await new Promise(r => setTimeout(r, 200));
       const screenshot = await page.screenshot({ type: 'png', fullPage: false });
       images.push({ index: i, data: screenshot.toString('base64'), mimeType: 'image/png' });
     }
