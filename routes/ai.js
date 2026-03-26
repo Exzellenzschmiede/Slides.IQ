@@ -3,7 +3,8 @@
 const express = require('express');
 const multer  = require('multer');
 const db = require('../database');
-const { generatePresentation, analyzeNarrativeArc, suggestImprovements } = require('../services/claude');
+const { generatePresentation, generateSingleSlide, analyzeNarrativeArc, suggestImprovements } = require('../services/claude');
+const { parseSlidesFromHtml, replaceSlideInHtml, insertSlideInHtml, extractCssFromHtml } = require('../services/slideUtils');
 const { parseFile } = require('../services/fileParser');
 
 const router = express.Router();
@@ -123,6 +124,124 @@ router.post('/generate/:presentationId', async (req, res) => {
     res.end();
   } catch (err) {
     console.error('Generation error:', err);
+    send({ type: 'error', message: err.message });
+    res.end();
+  }
+});
+
+// ─── Edit a single slide via AI (streaming SSE) ───────────────────────────
+
+router.post('/edit-slide/:presentationId', async (req, res) => {
+  const { prompt, slideIndex } = req.body;
+  if (!prompt || slideIndex === undefined) return res.status(400).json({ error: 'prompt and slideIndex required' });
+
+  const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
+  if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
+
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const model = prefs.mainModel || 'claude-sonnet-4-6';
+
+  const slides = parseSlidesFromHtml(row.html_content);
+  if (slideIndex < 0 || slideIndex >= slides.length) return res.status(400).json({ error: 'Invalid slideIndex' });
+
+  const cssContext = extractCssFromHtml(row.html_content);
+  const surroundingSlides = slides
+    .filter((_, i) => Math.abs(i - slideIndex) <= 2 && i !== slideIndex)
+    .map(s => s.html);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (data) => { res.write(`data: ${JSON.stringify(data)}\n\n`); if (res.flush) res.flush(); };
+
+  try {
+    send({ type: 'start' });
+
+    const { slideHtml } = await generateSingleSlide(
+      { prompt, slideHtml: slides[slideIndex].html, cssContext, surroundingSlides, model, mode: 'edit' },
+      (chunk) => send({ type: 'chunk', text: chunk })
+    );
+
+    const newHtml = replaceSlideInHtml(row.html_content, slideIndex, slideHtml);
+    const slideCount = (newHtml.match(/class="slide(?:\s|")/g) || []).length;
+
+    let versions = JSON.parse(row.versions || '[]');
+    versions.unshift({
+      id: require('uuid').v4(),
+      timestamp: new Date().toISOString(),
+      html_content: row.html_content,
+      label: `v${versions.length + 1} — ${new Date().toLocaleString('de', { dateStyle: 'short', timeStyle: 'short' })}`
+    });
+
+    db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, row.id);
+
+    send({ type: 'done', slide_count: slideCount });
+    res.end();
+  } catch (err) {
+    console.error('Edit slide error:', err);
+    send({ type: 'error', message: err.message });
+    res.end();
+  }
+});
+
+// ─── Insert a new slide via AI (streaming SSE) ────────────────────────────
+
+router.post('/insert-slide/:presentationId', async (req, res) => {
+  const { prompt, afterIndex } = req.body;
+  if (!prompt || afterIndex === undefined) return res.status(400).json({ error: 'prompt and afterIndex required' });
+
+  const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
+  if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
+
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const model = prefs.mainModel || 'claude-sonnet-4-6';
+
+  const slides = parseSlidesFromHtml(row.html_content);
+  const cssContext = extractCssFromHtml(row.html_content);
+  const surroundingSlides = slides
+    .filter((_, i) => Math.abs(i - afterIndex) <= 2)
+    .map(s => s.html);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (data) => { res.write(`data: ${JSON.stringify(data)}\n\n`); if (res.flush) res.flush(); };
+
+  try {
+    send({ type: 'start' });
+
+    const { slideHtml } = await generateSingleSlide(
+      { prompt, slideHtml: '', cssContext, surroundingSlides, model, mode: 'insert' },
+      (chunk) => send({ type: 'chunk', text: chunk })
+    );
+
+    const newHtml = insertSlideInHtml(row.html_content, afterIndex, slideHtml);
+    const slideCount = (newHtml.match(/class="slide(?:\s|")/g) || []).length;
+
+    let versions = JSON.parse(row.versions || '[]');
+    versions.unshift({
+      id: require('uuid').v4(),
+      timestamp: new Date().toISOString(),
+      html_content: row.html_content,
+      label: `v${versions.length + 1} — ${new Date().toLocaleString('de', { dateStyle: 'short', timeStyle: 'short' })}`
+    });
+
+    db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, row.id);
+
+    send({ type: 'done', slide_count: slideCount, new_index: afterIndex + 1 });
+    res.end();
+  } catch (err) {
+    console.error('Insert slide error:', err);
     send({ type: 'error', message: err.message });
     res.end();
   }

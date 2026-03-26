@@ -12,6 +12,12 @@ let presenterTimerInterval = null;
 let presenterSeconds = 0;
 let pendingAttachments = []; // [{type, name, content?, data?, mediaType?}]
 
+// Slide navigator state
+let currentSlideIndex = 0;
+let slideScopedMode = false;
+let slideScopedIndex = -1;
+let messageListenerActive = false;
+
 const QUICK_PROMPTS = [
   'Mache die Präsentation visuell beeindruckender',
   'Füge eine Agenda-Slide am Anfang hinzu',
@@ -23,6 +29,12 @@ const QUICK_PROMPTS = [
 
 export async function renderStudio(container, { id }) {
   if (!id) { navigate('dashboard'); return; }
+
+  // Reset state on each render
+  currentSlideIndex = 0;
+  slideScopedMode = false;
+  slideScopedIndex = -1;
+  messageListenerActive = false;
 
   try {
     currentPresentation = await api.presentations.get(id);
@@ -79,7 +91,7 @@ function buildStudioHTML(p) {
       <div class="card" style="flex:1;display:flex;flex-direction:column;gap:12px">
         <div class="flex items-center justify-between">
           <span class="form-label" style="margin-bottom:0">✦ AI Studio</span>
-          <span class="text-xs text-muted">Claude claude-opus-4-5</span>
+          <span class="text-xs text-muted" id="studio-model-label">Claude</span>
         </div>
 
         <div class="chat-messages" id="chat-messages">
@@ -96,7 +108,7 @@ function buildStudioHTML(p) {
         <div id="generating-indicator" style="display:none">
           <div class="generating-indicator">
             <div class="gen-dots"><span></span><span></span><span></span></div>
-            Claude generiert deine Präsentation…
+            <span id="generating-label">Claude generiert deine Präsentation…</span>
           </div>
         </div>
 
@@ -110,6 +122,11 @@ function buildStudioHTML(p) {
         </div>
 
         <div class="chat-input-area">
+          <!-- Slide mode banner -->
+          <div class="slide-mode-banner" id="slide-mode-banner" style="display:none">
+            <span class="slide-mode-label" id="slide-mode-label">Slide 1 bearbeiten</span>
+            <button class="btn btn-ghost btn-sm" id="slide-mode-off" style="font-size:10px;padding:2px 6px">✕ Ganzes Deck</button>
+          </div>
           <div id="attachment-chips" class="attachment-chips"></div>
           <div class="chat-input-wrapper">
             <button class="attach-btn" id="attach-btn" title="Datei anhängen (PDF, Word, Excel, PowerPoint, Bilder…)">📎</button>
@@ -136,7 +153,7 @@ function buildStudioHTML(p) {
       </div>
     </div>
 
-    <!-- Right: Preview -->
+    <!-- Right: Preview + Navigator -->
     <div class="studio-preview">
       <div class="preview-frame-container" id="preview-container">
         ${currentPresentation.html_content
@@ -147,12 +164,20 @@ function buildStudioHTML(p) {
             </div>`
         }
         <!-- Streaming overlay -->
-        <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
+        <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
           <div class="loading-orb"></div>
-          <div class="text-muted text-sm">Generiere Präsentation…</div>
+          <div class="text-muted text-sm" id="stream-label">Generiere Präsentation…</div>
           <div id="stream-chars" class="font-mono text-xs text-muted">0 Zeichen</div>
         </div>
       </div>
+
+      <!-- Slide Navigator -->
+      ${p.html_content ? `
+      <div class="slide-navigator" id="slide-navigator">
+        <!-- Built dynamically by buildSlideNavigator() -->
+      </div>
+      ` : ''}
+
       <div class="preview-actions">
         <span class="text-xs text-muted">Vorschau</span>
         <div style="flex:1"></div>
@@ -167,8 +192,20 @@ function buildStudioHTML(p) {
 
 function initStudio() {
   loadTemplateInfo();
+  loadModelLabel();
   loadPreview();
   bindEvents();
+  if (currentPresentation.html_content) {
+    buildSlideNavigator();
+  }
+}
+
+async function loadModelLabel() {
+  try {
+    const status = await api.ai.status();
+    const el = document.getElementById('studio-model-label');
+    if (el) el.textContent = status.model || 'Claude';
+  } catch {}
 }
 
 async function loadTemplateInfo() {
@@ -192,20 +229,443 @@ function loadPreview() {
   const url = URL.createObjectURL(blob);
   iframe.src = url;
 
-  // Listen for slide changes from iframe
-  window.addEventListener('message', (e) => {
-    if (e.data?.type === 'nexus-slide') {
-      document.getElementById('studio-meta').textContent =
-        `${e.data.total} Slides · Slide ${e.data.index + 1} aktiv`;
+  // Register message listener once per studio session
+  if (!messageListenerActive) {
+    messageListenerActive = true;
+    window.addEventListener('message', onIframeMessage);
+  }
+}
+
+function onIframeMessage(e) {
+  if (e.data?.type === 'nexus-slide') {
+    currentSlideIndex = e.data.index;
+    document.getElementById('studio-meta').textContent =
+      `${e.data.total} Slides · Slide ${e.data.index + 1} aktiv`;
+    syncNavigatorToSlide(e.data.index);
+  }
+  // Presenter panel
+  if (e.data?.type === 'nexus-slide') {
+    const notesEl = document.getElementById('presenter-notes-content');
+    const counterEl = document.getElementById('presenter-counter');
+    if (notesEl) notesEl.textContent = e.data.notes || '—';
+    if (counterEl) counterEl.textContent = `${e.data.index + 1} / ${e.data.total}`;
+  }
+}
+
+// ─── Slide Navigator ──────────────────────────────────────────────────────
+
+function buildSlideNavigator() {
+  const nav = document.getElementById('slide-navigator');
+  if (!nav) return;
+
+  const count = currentPresentation.slide_count || 0;
+  if (count === 0) { nav.innerHTML = ''; return; }
+
+  let html = '';
+
+  // Insert before first slide
+  html += `<button class="insert-tile-btn" data-after="-1" title="Slide am Anfang einfügen">+</button>`;
+
+  for (let i = 0; i < count; i++) {
+    html += `
+      <div class="slide-tile${i === currentSlideIndex ? ' active' : ''}" data-index="${i}">
+        <span>${i + 1}</span>
+        <div class="slide-tile-actions">
+          <button class="tile-action-btn" data-tile-action="edit" data-index="${i}" title="Mit KI bearbeiten">✏</button>
+          <button class="tile-action-btn" data-tile-action="dup" data-index="${i}" title="Duplizieren">⧉</button>
+          <button class="tile-action-btn danger" data-tile-action="del" data-index="${i}" title="Löschen">🗑</button>
+        </div>
+      </div>
+      <button class="insert-tile-btn" data-after="${i}" title="Slide danach einfügen">+</button>
+    `;
+  }
+
+  nav.innerHTML = html;
+
+  // Tile click → navigate iframe
+  nav.querySelectorAll('.slide-tile').forEach(tile => {
+    tile.addEventListener('click', (e) => {
+      if (e.target.closest('.slide-tile-actions')) return; // ignore action clicks
+      const idx = parseInt(tile.dataset.index);
+      gotoIframeSlide(idx);
+    });
+  });
+
+  // Action buttons
+  nav.querySelectorAll('[data-tile-action]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.tileAction;
+      const idx = parseInt(btn.dataset.index);
+      handleSlideAction(idx, action);
+    });
+  });
+
+  // Insert buttons
+  nav.querySelectorAll('.insert-tile-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const afterIndex = parseInt(btn.dataset.after);
+      showInsertSlideModal(afterIndex);
+    });
+  });
+}
+
+function syncNavigatorToSlide(index) {
+  document.querySelectorAll('.slide-tile').forEach((tile, i) => {
+    tile.classList.toggle('active', i === index);
+  });
+
+  // Scroll active tile into view
+  const activeTile = document.querySelector(`.slide-tile[data-index="${index}"]`);
+  activeTile?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+}
+
+function gotoIframeSlide(index) {
+  const iframe = document.getElementById('preview-iframe');
+  iframe?.contentWindow?.postMessage({ type: 'nexus-goto', index }, '*');
+  currentSlideIndex = index;
+  syncNavigatorToSlide(index);
+}
+
+function handleSlideAction(index, action) {
+  if (action === 'edit') {
+    activateSlideScopedMode(index);
+  } else if (action === 'dup') {
+    duplicateSlide(index);
+  } else if (action === 'del') {
+    deleteSlide(index);
+  }
+}
+
+function activateSlideScopedMode(index) {
+  slideScopedMode = true;
+  slideScopedIndex = index;
+
+  const banner = document.getElementById('slide-mode-banner');
+  const label = document.getElementById('slide-mode-label');
+  const input = document.getElementById('chat-input');
+
+  if (banner) banner.style.display = 'flex';
+  if (label) label.textContent = `Slide ${index + 1} bearbeiten`;
+  if (input) {
+    input.placeholder = `Slide ${index + 1} mit KI bearbeiten…\nShift+Enter für Zeilenumbruch`;
+    input.focus();
+  }
+
+  // Navigate to that slide in preview
+  gotoIframeSlide(index);
+}
+
+function deactivateSlideScopedMode() {
+  slideScopedMode = false;
+  slideScopedIndex = -1;
+
+  const banner = document.getElementById('slide-mode-banner');
+  const input = document.getElementById('chat-input');
+
+  if (banner) banner.style.display = 'none';
+  if (input) input.placeholder = 'Beschreibe deine Präsentation…\nShift+Enter für Zeilenumbruch';
+}
+
+async function duplicateSlide(index) {
+  if (isGenerating) return;
+  try {
+    const result = await api.presentations.duplicateSlide(currentPresentation.id, index);
+    currentPresentation.slide_count = result.slide_count;
+    await refreshAfterSlideOp(result.slide_count, result.new_index ?? index + 1);
+    toastSuccess(`Slide ${index + 1} dupliziert`);
+  } catch (err) {
+    toastError('Fehler: ' + err.message);
+  }
+}
+
+async function deleteSlide(index) {
+  if (isGenerating) return;
+  if (!confirm(`Slide ${index + 1} wirklich löschen?`)) return;
+  try {
+    const result = await api.presentations.deleteSlide(currentPresentation.id, index);
+    currentPresentation.slide_count = result.slide_count;
+    const newIndex = Math.min(index, result.slide_count - 1);
+    await refreshAfterSlideOp(result.slide_count, newIndex);
+    toastSuccess(`Slide ${index + 1} gelöscht`);
+  } catch (err) {
+    toastError('Fehler: ' + err.message);
+  }
+}
+
+async function refreshAfterSlideOp(slideCount, gotoIndex = 0) {
+  currentPresentation = await api.presentations.get(currentPresentation.id);
+  currentPresentation.slide_count = slideCount;
+  currentSlideIndex = gotoIndex;
+
+  // Rebuild preview
+  const container = document.getElementById('preview-container');
+  if (container) {
+    container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+      <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
+        <div class="loading-orb"></div>
+        <div class="text-muted text-sm" id="stream-label">Generiere…</div>
+        <div id="stream-chars" class="font-mono text-xs text-muted">0 Zeichen</div>
+      </div>`;
+    loadPreview();
+  }
+
+  buildSlideNavigator();
+
+  // Goto new index after iframe loads
+  setTimeout(() => gotoIframeSlide(gotoIndex), 600);
+
+  document.getElementById('studio-meta').textContent =
+    `${slideCount} Slides · gerade bearbeitet`;
+}
+
+function showInsertSlideModal(afterIndex) {
+  const posLabel = afterIndex < 0 ? 'am Anfang' : `nach Slide ${afterIndex + 1}`;
+  showModal(`Neue Slide einfügen (${posLabel})`, `
+    <div class="form-group">
+      <label class="form-label">Was soll diese Slide zeigen?</label>
+      <textarea class="form-input" id="insert-slide-prompt" rows="3"
+        placeholder="z.B. Eine Folie über unsere Kernzielgruppe mit 3 Personas"
+        style="resize:vertical;width:100%"></textarea>
+    </div>
+    <div class="flex gap-8" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost" id="insert-slide-cancel">Abbrechen</button>
+      <button class="btn btn-primary" id="insert-slide-confirm">Generieren</button>
+    </div>
+  `, `Slide wird im Stil der Präsentation generiert`);
+
+  setTimeout(() => document.getElementById('insert-slide-prompt')?.focus(), 50);
+
+  document.getElementById('insert-slide-cancel')?.addEventListener('click', closeModal);
+  document.getElementById('insert-slide-confirm')?.addEventListener('click', async () => {
+    const prompt = document.getElementById('insert-slide-prompt')?.value.trim();
+    if (!prompt) return;
+    closeModal();
+    await streamInsertSlide(afterIndex, prompt);
+  });
+
+  document.getElementById('insert-slide-prompt')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('insert-slide-confirm')?.click();
     }
   });
 }
+
+// ─── Streaming: edit or insert single slide ───────────────────────────────
+
+async function streamEditSlide(slideIndex, prompt) {
+  if (isGenerating) return;
+  isGenerating = true;
+
+  setGeneratingUI(true, `Slide ${slideIndex + 1} wird bearbeitet…`);
+  showStreamOverlay(`Slide ${slideIndex + 1} bearbeiten…`);
+
+  addChatMessage('user', `[Slide ${slideIndex + 1}] ${prompt}`);
+
+  try {
+    let charCount = 0;
+    for await (const event of api.ai.editSlide(currentPresentation.id, slideIndex, prompt)) {
+      if (event.type === 'chunk') {
+        charCount += event.text.length;
+        const charEl = document.getElementById('stream-chars');
+        if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
+      } else if (event.type === 'done') {
+        currentPresentation.slide_count = event.slide_count;
+      } else if (event.type === 'error') {
+        throw new Error(event.message);
+      }
+    }
+
+    await refreshAfterSlideOp(currentPresentation.slide_count, slideIndex);
+    addChatMessage('assistant', `✓ Slide ${slideIndex + 1} aktualisiert`);
+    toastSuccess(`Slide ${slideIndex + 1} aktualisiert!`);
+  } catch (err) {
+    addChatMessage('assistant', '✕ Fehler: ' + err.message);
+    toastError(err.message);
+  } finally {
+    isGenerating = false;
+    setGeneratingUI(false);
+    hideStreamOverlay();
+  }
+}
+
+async function streamInsertSlide(afterIndex, prompt) {
+  if (isGenerating) return;
+  isGenerating = true;
+
+  const posLabel = afterIndex < 0 ? 'am Anfang' : `nach Slide ${afterIndex + 1}`;
+  setGeneratingUI(true, `Neue Slide wird generiert (${posLabel})…`);
+  showStreamOverlay(`Neue Slide generieren…`);
+
+  addChatMessage('user', `[Neue Slide ${posLabel}] ${prompt}`);
+
+  try {
+    let charCount = 0;
+    for await (const event of api.ai.insertSlide(currentPresentation.id, afterIndex, prompt)) {
+      if (event.type === 'chunk') {
+        charCount += event.text.length;
+        const charEl = document.getElementById('stream-chars');
+        if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
+      } else if (event.type === 'done') {
+        currentPresentation.slide_count = event.slide_count;
+        const newIndex = event.new_index ?? afterIndex + 1;
+        await refreshAfterSlideOp(currentPresentation.slide_count, newIndex);
+        addChatMessage('assistant', `✓ Neue Slide ${newIndex + 1} eingefügt (${currentPresentation.slide_count} Slides gesamt)`);
+        toastSuccess('Neue Slide eingefügt!');
+      } else if (event.type === 'error') {
+        throw new Error(event.message);
+      }
+    }
+  } catch (err) {
+    addChatMessage('assistant', '✕ Fehler: ' + err.message);
+    toastError(err.message);
+  } finally {
+    isGenerating = false;
+    setGeneratingUI(false);
+    hideStreamOverlay();
+  }
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────
+
+function setGeneratingUI(active, label = 'Claude generiert…') {
+  const indicator = document.getElementById('generating-indicator');
+  const labelEl = document.getElementById('generating-label');
+  const input = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('send-btn');
+  const quickPrompts = document.getElementById('quick-prompts');
+
+  if (indicator) indicator.style.display = active ? 'block' : 'none';
+  if (labelEl) labelEl.textContent = label;
+  if (input) input.disabled = active;
+  if (sendBtn) sendBtn.disabled = active;
+  if (quickPrompts) quickPrompts.style.opacity = active ? '0.4' : '1';
+}
+
+function showStreamOverlay(label = 'Generiere…') {
+  const overlay = document.getElementById('stream-overlay');
+  const labelEl = document.getElementById('stream-label');
+  const charEl = document.getElementById('stream-chars');
+  if (overlay) overlay.style.display = 'flex';
+  if (labelEl) labelEl.textContent = label;
+  if (charEl) charEl.textContent = '0 Zeichen';
+}
+
+function hideStreamOverlay() {
+  const overlay = document.getElementById('stream-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ─── Main send (routes to full generation or slide-scoped edit) ───────────
+
+async function sendMessage() {
+  if (isGenerating) return;
+  const input = document.getElementById('chat-input');
+  const prompt = input?.value.trim();
+  if (!prompt) return;
+
+  // Route to slide-scoped edit if mode is active
+  if (slideScopedMode && slideScopedIndex >= 0) {
+    input.value = '';
+    await streamEditSlide(slideScopedIndex, prompt);
+    return;
+  }
+
+  const attachments = [...pendingAttachments];
+  clearAttachments();
+
+  isGenerating = true;
+  input.value = '';
+  setGeneratingUI(true, 'Claude generiert deine Präsentation…');
+
+  // Add user message to chat
+  const attachmentLabel = attachments.length
+    ? `\n📎 ${attachments.map(a => a.name).join(', ')}`
+    : '';
+  addChatMessage('user', prompt + attachmentLabel);
+
+  showStreamOverlay('Generiere Präsentation…');
+
+  let charCount = 0;
+
+  try {
+    for await (const event of api.ai.generate(currentPresentation.id, prompt, attachments)) {
+      if (event.type === 'chunk') {
+        charCount += event.text.length;
+        const charEl = document.getElementById('stream-chars');
+        if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
+      } else if (event.type === 'done') {
+        currentPresentation.slide_count = event.slide_count;
+      } else if (event.type === 'warning') {
+        toastError(event.message);
+      } else if (event.type === 'error') {
+        throw new Error(event.message);
+      }
+    }
+
+    // Update presentation
+    currentPresentation = await api.presentations.get(currentPresentation.id);
+
+    // Rebuild preview and navigator
+    const container = document.getElementById('preview-container');
+    if (container) {
+      container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+        <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
+          <div class="loading-orb"></div>
+          <div class="text-muted text-sm" id="stream-label">Generiere…</div>
+          <div id="stream-chars" class="font-mono text-xs text-muted">0 Zeichen</div>
+        </div>`;
+      loadPreview();
+
+      // Show suggest button if not present
+      const previewActions = document.querySelector('.preview-actions');
+      if (previewActions && !document.getElementById('btn-suggest')) {
+        previewActions.innerHTML += `<button class="btn btn-ghost btn-sm" id="btn-suggest">◎ Verbesserungen</button>`;
+        document.getElementById('btn-suggest')?.addEventListener('click', loadSuggestions);
+      }
+    }
+
+    // Add navigator if not present
+    if (!document.getElementById('slide-navigator')) {
+      const previewDiv = document.querySelector('.studio-preview');
+      if (previewDiv) {
+        const nav = document.createElement('div');
+        nav.className = 'slide-navigator';
+        nav.id = 'slide-navigator';
+        previewDiv.insertBefore(nav, previewDiv.querySelector('.preview-actions'));
+      }
+    }
+    buildSlideNavigator();
+
+    document.getElementById('studio-meta').textContent =
+      `${currentPresentation.slide_count} Slides · gerade aktualisiert`;
+
+    addChatMessage('assistant', `✓ Präsentation erstellt mit ${currentPresentation.slide_count} Slides`);
+    toastSuccess('Präsentation generiert!');
+
+    // Show present button if not visible
+    if (!document.getElementById('btn-present')) {
+      refreshStudioHeader();
+    }
+
+  } catch (err) {
+    addChatMessage('assistant', '✕ Fehler: ' + err.message);
+    toastError(err.message);
+  } finally {
+    isGenerating = false;
+    setGeneratingUI(false);
+    hideStreamOverlay();
+    input?.focus();
+  }
+}
+
+// ─── Event binding ────────────────────────────────────────────────────────
 
 function bindEvents() {
   const chatInput = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
 
-  // Send on Enter (not Shift+Enter)
   chatInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -223,6 +683,9 @@ function bindEvents() {
     });
   });
 
+  // Slide mode off
+  document.getElementById('slide-mode-off')?.addEventListener('click', deactivateSlideScopedMode);
+
   // File attachment
   document.getElementById('attach-btn')?.addEventListener('click', () => {
     document.getElementById('file-input')?.click();
@@ -230,7 +693,7 @@ function bindEvents() {
 
   document.getElementById('file-input')?.addEventListener('change', async (e) => {
     const files = Array.from(e.target.files || []);
-    e.target.value = ''; // Reset so same file can be re-selected
+    e.target.value = '';
     for (const file of files) {
       await uploadAttachment(file);
     }
@@ -248,32 +711,24 @@ function bindEvents() {
 
   // WYSIWYG slide editor
   document.getElementById('btn-edit-slides')?.addEventListener('click', () => {
-    openSlideEditor(currentPresentation, async (newHtml) => {
+    openSlideEditor(currentPresentation, async () => {
       currentPresentation = await api.presentations.get(currentPresentation.id);
       loadPreview();
+      buildSlideNavigator();
       document.getElementById('studio-meta').textContent =
         `${currentPresentation.slide_count} Slides · gerade bearbeitet`;
     });
   });
 
-  // Analyze
   document.getElementById('btn-analyze')?.addEventListener('click', showAnalysis);
-
-  // Suggest
   document.getElementById('btn-suggest')?.addEventListener('click', loadSuggestions);
-
-  // Versions
   document.getElementById('btn-versions')?.addEventListener('click', showVersions);
-
-  // Share
   document.getElementById('btn-share')?.addEventListener('click', showShare);
 
-  // Export HTML
   document.getElementById('btn-export-html')?.addEventListener('click', () => {
     api.presentations.exportHtml(currentPresentation.id, currentPresentation.title);
   });
 
-  // Export PDF
   document.getElementById('btn-export-pdf')?.addEventListener('click', async () => {
     try {
       toastInfo('PDF wird erstellt…');
@@ -287,14 +742,14 @@ function bindEvents() {
     }
   });
 
-  // Change template
   document.getElementById('btn-change-template')?.addEventListener('click', showTemplateChooser);
 
-  // Close suggestions
   document.getElementById('close-suggestions')?.addEventListener('click', () => {
     document.getElementById('suggestions-panel').classList.add('hidden');
   });
 }
+
+// ─── Attachment handling ──────────────────────────────────────────────────
 
 async function uploadAttachment(file) {
   const chipId = `chip-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -353,95 +808,7 @@ function clearAttachments() {
   if (chips) chips.innerHTML = '';
 }
 
-async function sendMessage() {
-  if (isGenerating) return;
-  const input = document.getElementById('chat-input');
-  const prompt = input?.value.trim();
-  if (!prompt) return;
-
-  const attachments = [...pendingAttachments];
-  clearAttachments();
-
-  isGenerating = true;
-  input.value = '';
-  input.disabled = true;
-  document.getElementById('send-btn').disabled = true;
-
-  // Add user message to chat
-  const attachmentLabel = attachments.length
-    ? `\n📎 ${attachments.map(a => a.name).join(', ')}`
-    : '';
-  addChatMessage('user', prompt + attachmentLabel);
-
-  // Show generating indicator
-  document.getElementById('generating-indicator').style.display = 'block';
-  document.getElementById('quick-prompts').style.opacity = '0.4';
-
-  // Show stream overlay
-  const overlay = document.getElementById('stream-overlay');
-  if (overlay) overlay.style.display = 'flex';
-
-  let charCount = 0;
-  let generatedHtml = '';
-
-  try {
-    for await (const event of api.ai.generate(currentPresentation.id, prompt, attachments)) {
-      if (event.type === 'chunk') {
-        charCount += event.text.length;
-        generatedHtml += event.text;
-        const charEl = document.getElementById('stream-chars');
-        if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
-      } else if (event.type === 'done') {
-        currentPresentation.slide_count = event.slide_count;
-      } else if (event.type === 'warning') {
-        toastError(event.message);
-      } else if (event.type === 'error') {
-        throw new Error(event.message);
-      }
-    }
-
-    // Update presentation
-    currentPresentation = await api.presentations.get(currentPresentation.id);
-
-    // Refresh preview
-    const container = document.getElementById('preview-container');
-    if (container) {
-      container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>`;
-      loadPreview();
-
-      // Show suggest button
-      const suggestBtn = document.querySelector('.preview-actions');
-      if (suggestBtn && !document.getElementById('btn-suggest')) {
-        suggestBtn.innerHTML += `<button class="btn btn-ghost btn-sm" id="btn-suggest">◎ Verbesserungen</button>`;
-        document.getElementById('btn-suggest')?.addEventListener('click', loadSuggestions);
-      }
-    }
-
-    // Update meta
-    document.getElementById('studio-meta').textContent =
-      `${currentPresentation.slide_count} Slides · gerade aktualisiert`;
-
-    addChatMessage('assistant', `✓ Präsentation erstellt mit ${currentPresentation.slide_count} Slides`);
-    toastSuccess('Präsentation generiert!');
-
-    // Show present button if not visible
-    if (!document.getElementById('btn-present')) {
-      refreshStudioHeader();
-    }
-
-  } catch (err) {
-    addChatMessage('assistant', '✕ Fehler: ' + err.message);
-    toastError(err.message);
-  } finally {
-    isGenerating = false;
-    input.disabled = false;
-    document.getElementById('send-btn').disabled = false;
-    document.getElementById('generating-indicator').style.display = 'none';
-    document.getElementById('quick-prompts').style.opacity = '1';
-    if (overlay) overlay.style.display = 'none';
-    input.focus();
-  }
-}
+// ─── Chat ─────────────────────────────────────────────────────────────────
 
 function addChatMessage(role, text) {
   const messages = document.getElementById('chat-messages');
@@ -454,9 +821,10 @@ function addChatMessage(role, text) {
 }
 
 function refreshStudioHeader() {
-  // Reload full view
   renderStudio(document.getElementById('view-container'), { id: currentPresentation.id });
 }
+
+// ─── Analysis / Suggestions ───────────────────────────────────────────────
 
 async function showAnalysis() {
   showModal('Narrative Arc Analyse', '<div class="loading-screen" style="height:200px"><div class="loading-orb"></div></div>');
@@ -513,6 +881,8 @@ async function loadSuggestions() {
   }
 }
 
+// ─── Versions / Share / Template ─────────────────────────────────────────
+
 async function showVersions() {
   const p = await api.presentations.get(currentPresentation.id);
   const versions = p.versions || [];
@@ -539,6 +909,7 @@ async function showVersions() {
       currentPresentation = await api.presentations.get(currentPresentation.id);
       closeModal();
       loadPreview();
+      buildSlideNavigator();
       toastSuccess('Version wiederhergestellt!');
     } catch (err) {
       toastError('Fehler: ' + err.message);
@@ -626,6 +997,8 @@ async function showTemplateChooser() {
   });
 }
 
+// ─── Presenter mode ───────────────────────────────────────────────────────
+
 function openPresenterMode() {
   if (!currentPresentation.html_content) return;
 
@@ -635,9 +1008,6 @@ function openPresenterMode() {
   const iframe = document.getElementById('presenter-iframe');
   const blob = new Blob([currentPresentation.html_content], { type: 'text/html' });
   iframe.src = URL.createObjectURL(blob);
-
-  // Listen for slide events
-  window.addEventListener('message', onPresenterMessage);
 
   // Start timer
   presenterSeconds = 0;
@@ -651,19 +1021,9 @@ function openPresenterMode() {
   }, 1000);
 }
 
-function onPresenterMessage(e) {
-  if (e.data?.type === 'nexus-slide') {
-    const notesEl = document.getElementById('presenter-notes-content');
-    const counterEl = document.getElementById('presenter-counter');
-    if (notesEl) notesEl.textContent = e.data.notes || '—';
-    if (counterEl) counterEl.textContent = `${e.data.index + 1} / ${e.data.total}`;
-  }
-}
-
 window.closePresenter = () => {
   document.getElementById('presenter-panel').classList.add('hidden');
   clearInterval(presenterTimerInterval);
-  window.removeEventListener('message', onPresenterMessage);
 };
 
 window.resetTimer = () => {
@@ -680,6 +1040,8 @@ window.presenterGoto = (dir) => {
     '*'
   );
 };
+
+// ─── Utilities ────────────────────────────────────────────────────────────
 
 function getTemplateGradient(theme) {
   if (!theme) return 'linear-gradient(135deg,#1a1a2e,#2d1b69)';

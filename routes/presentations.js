@@ -170,6 +170,57 @@ router.post('/:id/restore/:versionId', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Delete a single slide ────────────────────────────────────────────────
+
+router.delete('/:id/slides/:slideIndex', (req, res) => {
+  const slideIndex = parseInt(req.params.slideIndex);
+  if (isNaN(slideIndex)) return res.status(400).json({ error: 'Invalid slideIndex' });
+
+  const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
+  if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
+
+  const { deleteSlideInHtml } = require('../services/slideUtils');
+  const newHtml = deleteSlideInHtml(row.html_content, slideIndex);
+  const slideCount = countSlides(newHtml);
+
+  let versions = JSON.parse(row.versions || '[]');
+  versions.unshift({
+    id: uuid(),
+    timestamp: new Date().toISOString(),
+    html_content: row.html_content,
+    label: `v${versions.length + 1} — ${new Date().toLocaleString('de', { dateStyle: 'short', timeStyle: 'short' })}`
+  });
+
+  db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, req.params.id);
+
+  res.json({ ok: true, slide_count: slideCount });
+});
+
+// ─── Duplicate a single slide ─────────────────────────────────────────────
+
+router.post('/:id/slides/:slideIndex/duplicate', (req, res) => {
+  const slideIndex = parseInt(req.params.slideIndex);
+  if (isNaN(slideIndex)) return res.status(400).json({ error: 'Invalid slideIndex' });
+
+  const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
+  if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
+
+  const { parseSlidesFromHtml, insertSlideInHtml } = require('../services/slideUtils');
+  const slides = parseSlidesFromHtml(row.html_content);
+  if (slideIndex < 0 || slideIndex >= slides.length) return res.status(400).json({ error: 'Invalid slideIndex' });
+
+  // Strip "active" class from duplicate so it doesn't conflict
+  const dupHtml = slides[slideIndex].html.replace(/class="slide active"/, 'class="slide"');
+  const newHtml = insertSlideInHtml(row.html_content, slideIndex, dupHtml);
+  const slideCount = countSlides(newHtml);
+
+  db.prepare(`UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(newHtml, slideCount, req.params.id);
+
+  res.json({ ok: true, slide_count: slideCount, new_index: slideIndex + 1 });
+});
+
 // ─── Delete ───────────────────────────────────────────────────────────────
 
 router.delete('/:id', (req, res) => {

@@ -658,8 +658,66 @@ Antworte ausschließlich als JSON (kein Markdown):
   }
 }
 
+// ─── Generate / edit a single slide ──────────────────────────────────────
+
+async function generateSingleSlide({ prompt, slideHtml = '', cssContext = '', surroundingSlides = [], model = 'claude-sonnet-4-6', mode = 'edit' }, onChunk) {
+  const anthropic = getClient();
+
+  const cssSection = cssContext
+    ? `\n\nVorhandenes CSS der Präsentation (Stil beibehalten):\n<css>\n${cssContext}\n</css>`
+    : '';
+
+  const surroundingContext = surroundingSlides.length > 0
+    ? `\n\nNachbarn-Slides (nur als Stil-Referenz — diese NICHT ausgeben):\n${surroundingSlides.join('\n\n')}`
+    : '';
+
+  const systemPrompt = `Du bist Slides.IQ — Experte für einzelne HTML-Präsentations-Slides.
+Deine Aufgabe: Gib NUR ein einziges <div class="slide"> Element zurück.
+
+REGELN:
+- Beginne DIREKT mit <div class="slide"
+- Ende mit </div> — KEIN </body>, KEIN </html>, KEIN Markdown
+- KEINE neuen <style> Tags — nutze inline-Styles die zu den vorhandenen CSS Custom Properties passen
+- Nutze: --primary, --accent, --bg, --text
+- Setze data-notes mit Speaker Notes
+- Visuell hochwertig: klare Hierarchie, prägnanter Text, ansprechendes Layout${cssSection}${surroundingContext}`;
+
+  const userMessage = mode === 'edit'
+    ? `Bestehende Slide:\n${slideHtml}\n\nAufgabe: ${prompt}\n\nGib die überarbeitete Slide zurück.`
+    : `Erstelle eine neue Slide: ${prompt}\n\nGib die neue Slide zurück.`;
+
+  let fullContent = '';
+  let stopReason = null;
+
+  const stream = await anthropic.messages.stream({
+    model,
+    max_tokens: 8000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }]
+  });
+
+  for await (const chunk of stream) {
+    if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+      fullContent += chunk.delta.text;
+      if (onChunk) onChunk(chunk.delta.text);
+    }
+    if (chunk.type === 'message_delta' && chunk.delta.stop_reason) {
+      stopReason = chunk.delta.stop_reason;
+    }
+  }
+
+  // Strip markdown fences if present
+  const clean = fullContent.trim()
+    .replace(/^```(?:html)?\s*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .trim();
+
+  return { slideHtml: clean, stopReason };
+}
+
 module.exports = {
   generatePresentation,
+  generateSingleSlide,
   analyzeNarrativeArc,
   suggestImprovements,
   analyzeTemplateFromPptx,
