@@ -552,10 +552,79 @@ Format: JSON Array mit {title, description, prompt} wobei prompt ein fertig form
 
 const DEFAULT_SYSTEM_PROMPT = `Erstelle visuell beeindruckende Präsentationen mit modernem Design, Glasmorphismus, Gradienten und CSS-Animationen. Sei kreativ und innovativ.`;
 
+// ─── Analyze PPTX and generate template ──────────────────────────────────
+
+async function analyzeTemplateFromPptx({ textContent, themeColors, slideCount }) {
+  const anthropic = getClient();
+
+  const colorLines = Object.entries(themeColors)
+    .filter(([k]) => !['majorFont', 'minorFont'].includes(k))
+    .map(([k, v]) => `  ${k}: ${v}`)
+    .join('\n');
+
+  const fontLines = [themeColors.majorFont, themeColors.minorFont]
+    .filter(Boolean).join(', ');
+
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2000,
+    messages: [{
+      role: 'user',
+      content: `Du analysierst eine PowerPoint-Präsentation (${slideCount} Folien) und erstellst daraus ein Template für Slides.IQ.
+
+PRÄSENTATIONSINHALT:
+${textContent.substring(0, 3000)}
+
+EXTRAHIERTE DESIGNDATEN:
+Farben:
+${colorLines || '  (keine Farbdaten verfügbar)'}
+${fontLines ? `Schriftarten: ${fontLines}` : ''}
+
+Erstelle ein Slides.IQ Template das den erkannten visuellen Stil widerspiegelt.
+
+Antworte ausschließlich als JSON (kein Markdown):
+{
+  "name": "Template-Name (kreativ, prägnant, max 30 Zeichen)",
+  "description": "Kurze Stilbeschreibung (max 100 Zeichen)",
+  "primaryColor": "#hexcode",
+  "accentColor": "#hexcode",
+  "bgColor": "#hexcode",
+  "style": "cosmic|minimal|neon|corporate|gradient",
+  "system_prompt": "Detaillierter System-Prompt für Claude der den erkannten visuellen Stil beschreibt: Farbpalette, Typografie, Layout-Präferenzen, Animationsstil, visuelle Atmosphäre. Verwende die extrahierten Farben. 200-300 Wörter auf Deutsch."
+}`
+    }]
+  });
+
+  try {
+    const text = response.content[0].text;
+    const jsonMatch = text.match(/\{[\s\S]+\}/);
+    const r = JSON.parse(jsonMatch[0]);
+    return {
+      name:          r.name          || 'Importiertes Template',
+      description:   r.description   || 'Aus PowerPoint importiert',
+      system_prompt: r.system_prompt || 'Erstelle Präsentationen im professionellen Stil.',
+      theme: {
+        primaryColor: r.primaryColor || '#7c3aed',
+        accentColor:  r.accentColor  || '#06b6d4',
+        bgColor:      r.bgColor      || '#05070f',
+        style:        r.style        || 'corporate'
+      }
+    };
+  } catch {
+    return {
+      name: 'Importiertes Template',
+      description: 'Aus PowerPoint importiert',
+      system_prompt: 'Erstelle Präsentationen im modernen professionellen Stil.',
+      theme: { primaryColor: '#7c3aed', accentColor: '#06b6d4', bgColor: '#05070f', style: 'corporate' }
+    };
+  }
+}
+
 module.exports = {
   generatePresentation,
   analyzeNarrativeArc,
   suggestImprovements,
+  analyzeTemplateFromPptx,
   injectFramework,
   stripFramework,
   PRESENTATION_FRAMEWORK

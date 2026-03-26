@@ -52,7 +52,17 @@ export const api = {
     get: (id) => apiFetch(`/templates/${id}`),
     create: (data) => apiFetch('/templates', { method: 'POST', body: data }),
     update: (id, data) => apiFetch(`/templates/${id}`, { method: 'PUT', body: data }),
-    delete: (id) => apiFetch(`/templates/${id}`, { method: 'DELETE' })
+    delete: (id) => apiFetch(`/templates/${id}`, { method: 'DELETE' }),
+    analyzeFromPptx: async (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${API_BASE}/templates/from-pptx`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
   },
 
   slideLibrary: {

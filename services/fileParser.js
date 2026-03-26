@@ -136,4 +136,39 @@ function parsePptx(buffer) {
   }).filter(Boolean).join('\n\n');
 }
 
-module.exports = { parseFile };
+// ─── PPTX: extract design info for template generation ───────────────────
+
+function parsePptxForTemplate(buffer) {
+  const AdmZip = require('adm-zip');
+  const zip    = new AdmZip(buffer);
+
+  const textContent = parsePptx(buffer);
+
+  // Extract theme colors from ppt/theme/theme1.xml
+  const themeColors = {};
+  const themeEntry  = zip.getEntry('ppt/theme/theme1.xml');
+  if (themeEntry) {
+    const xml = themeEntry.getData().toString('utf8');
+
+    // Named color slots
+    const slots = ['dk1', 'lt1', 'dk2', 'lt2', 'accent1', 'accent2', 'accent3'];
+    for (const slot of slots) {
+      const srgb = xml.match(new RegExp(`<a:${slot}[^>]*>[\\s\\S]*?<a:srgbClr val="([0-9A-Fa-f]{6})"`, 'm'));
+      const sys  = xml.match(new RegExp(`<a:${slot}[^>]*>[\\s\\S]*?<a:sysClr[^>]*lastClr="([0-9A-Fa-f]{6})"`, 'm'));
+      if (srgb) themeColors[slot] = '#' + srgb[1];
+      else if (sys) themeColors[slot] = '#' + sys[1];
+    }
+
+    // Font scheme
+    const majorFont = xml.match(/<a:majorFont[^>]*>[\s\S]*?<a:latin typeface="([^"+][^"]*)"/m);
+    const minorFont = xml.match(/<a:minorFont[^>]*>[\s\S]*?<a:latin typeface="([^"+][^"]*)"/m);
+    if (majorFont) themeColors.majorFont = majorFont[1];
+    if (minorFont) themeColors.minorFont = minorFont[1];
+  }
+
+  const slideCount = (textContent.match(/^Folie \d+:/mg) || []).length;
+
+  return { textContent, themeColors, slideCount };
+}
+
+module.exports = { parseFile, parsePptxForTemplate };

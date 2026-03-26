@@ -21,8 +21,12 @@ export async function renderTemplates(container) {
         <h1 class="view-title">Templates</h1>
         <p class="view-subtitle">Visuelle Stile und Systemprompts für Claude</p>
       </div>
-      <button class="btn btn-primary" id="new-template-btn">+ Neues Template</button>
+      <div class="flex gap-8">
+        <button class="btn btn-ghost" id="import-pptx-btn">⬆ Aus PowerPoint</button>
+        <button class="btn btn-primary" id="new-template-btn">+ Neues Template</button>
+      </div>
     </div>
+    <input type="file" id="pptx-file-input" accept=".pptx" style="display:none">
 
     <div class="templates-grid">
       ${templates.map(renderTemplateCard).join('')}
@@ -43,6 +47,15 @@ export async function renderTemplates(container) {
   `;
 
   document.getElementById('new-template-btn').addEventListener('click', showCreateModal);
+
+  const pptxInput = document.getElementById('pptx-file-input');
+  document.getElementById('import-pptx-btn').addEventListener('click', () => pptxInput.click());
+  pptxInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    pptxInput.value = '';
+    await handlePptxImport(file, container);
+  });
 
   document.querySelectorAll('.template-edit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -189,6 +202,70 @@ function bindTemplateForm(existing) {
       closeModal();
       toastSuccess(existing ? 'Template gespeichert!' : 'Template erstellt!');
       renderTemplates(document.getElementById('view-container'));
+    } catch (err) {
+      toastError(err.message);
+    }
+  });
+}
+
+// ─── PPTX Import ──────────────────────────────────────────────────────────
+
+async function handlePptxImport(file, container) {
+  // Show loading modal
+  showModal(
+    'PowerPoint analysieren',
+    `<div style="text-align:center;padding:32px 0">
+      <div class="loading-orb" style="width:40px;height:40px;margin:0 auto 16px"></div>
+      <div style="color:var(--text-muted);font-size:14px">AI analysiert Stil und Farben…</div>
+      <div style="color:var(--text-muted);font-size:12px;margin-top:8px;opacity:0.6">${file.name}</div>
+    </div>`,
+    'Template wird aus deiner Präsentation generiert'
+  );
+
+  let suggestion;
+  try {
+    suggestion = await api.templates.analyzeFromPptx(file);
+  } catch (err) {
+    closeModal();
+    toastError('Analyse fehlgeschlagen: ' + err.message);
+    return;
+  }
+
+  // Re-open modal with editable preview of the AI suggestion
+  showModal(
+    'Template aus PowerPoint',
+    buildTemplateForm({
+      name: suggestion.name,
+      description: suggestion.description,
+      system_prompt: suggestion.system_prompt,
+      theme: suggestion.theme
+    }),
+    'Von AI generiert — du kannst alles anpassen bevor du speicherst'
+  );
+
+  document.getElementById('save-template-btn').textContent = 'Template speichern';
+  document.getElementById('save-template-btn').addEventListener('click', async () => {
+    const data = {
+      name: document.getElementById('tpl-name').value.trim(),
+      description: document.getElementById('tpl-desc').value.trim(),
+      system_prompt: document.getElementById('tpl-prompt').value.trim(),
+      theme: {
+        primaryColor: document.getElementById('tpl-primary').value,
+        accentColor:  document.getElementById('tpl-accent').value,
+        style: suggestion.theme?.style || 'corporate'
+      }
+    };
+
+    if (!data.name || !data.system_prompt) {
+      toastError('Name und System Prompt sind Pflichtfelder');
+      return;
+    }
+
+    try {
+      await api.templates.create(data);
+      closeModal();
+      toastSuccess('Template aus PowerPoint erstellt!');
+      renderTemplates(container);
     } catch (err) {
       toastError(err.message);
     }
