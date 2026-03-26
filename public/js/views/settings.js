@@ -39,10 +39,9 @@ export async function renderSettings(container) {
           <select class="form-select" id="pref-model">
             ${[
               ['claude-opus-4-6',          'Opus 4.6 — Stärkstes Modell'],
-              ['claude-opus-4-5',          'Opus 4.5'],
-              ['claude-sonnet-4-6',        'Sonnet 4.6 — Schneller & kosteneffizienter'],
+              ['claude-sonnet-4-6',        'Sonnet 4.6 — Ausgewogen'],
               ['claude-haiku-4-5-20251001','Haiku 4.5 — Schnellstes Modell'],
-            ].map(([v, l]) => `<option value="${v}" ${(prefs.mainModel || 'claude-opus-4-5') === v ? 'selected' : ''}>${l}</option>`).join('')}
+            ].map(([v, l]) => `<option value="${v}" ${(prefs.mainModel || 'claude-sonnet-4-6') === v ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
           <div class="text-xs text-muted" style="margin-top:6px">Gilt für die Präsentationsgenerierung. Analyse-Funktionen nutzen immer Haiku.</div>
         </div>
@@ -150,7 +149,7 @@ export async function renderSettings(container) {
           </div>
           <div>
             <div class="form-label">Model</div>
-            <div class="font-mono" id="model-info">${prefs.mainModel || 'claude-opus-4-5'}</div>
+            <div class="font-mono" id="model-info">${prefs.mainModel || 'claude-sonnet-4-6'}</div>
           </div>
           <div>
             <div class="form-label">Datenbank</div>

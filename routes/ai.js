@@ -52,7 +52,7 @@ router.post('/generate/:presentationId', async (req, res) => {
   // Read model from settings
   const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const model = prefs.mainModel || 'claude-opus-4-5';
+  const model = prefs.mainModel || 'claude-sonnet-4-6';
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -160,7 +160,7 @@ router.get('/status', (req, res) => {
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
   res.json({
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
-    model: prefs.mainModel || 'claude-opus-4-5'
+    model: prefs.mainModel || 'claude-sonnet-4-6'
   });
 });
 

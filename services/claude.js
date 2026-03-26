@@ -372,7 +372,7 @@ Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, k
 
 // ─── Generation with streaming ────────────────────────────────────────────
 
-async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-opus-4-5' }, onChunk) {
+async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-sonnet-4-6' }, onChunk) {
   const anthropic = getClient();
   const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, brand);
 
