@@ -124,12 +124,6 @@ app.put('/api/settings', (req, res) => {
   res.json({ ok: true });
 });
 
-// Slide Library
-app.get('/api/slide-library', (req, res) => {
-  const db = require('./database');
-  const rows = db.prepare('SELECT * FROM slide_library ORDER BY created_at DESC').all();
-  res.json(rows.map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })));
-});
 
 // ─── SPA fallback ─────────────────────────────────────────────────────────
 

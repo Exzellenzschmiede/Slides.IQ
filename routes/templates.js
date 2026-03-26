@@ -95,10 +95,5 @@ router.post('/from-pptx', (req, res, next) => {
   }
 });
 
-// Slide Library
-router.get('/slide-library', (req, res) => {
-  const rows = db.prepare('SELECT * FROM slide_library ORDER BY created_at DESC').all();
-  res.json(rows.map(r => ({ ...r, tags: JSON.parse(r.tags || '[]') })));
-});
 
 module.exports = router;

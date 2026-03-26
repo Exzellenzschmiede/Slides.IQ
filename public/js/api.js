@@ -65,10 +65,6 @@ export const api = {
     }
   },
 
-  slideLibrary: {
-    list: () => apiFetch('/slide-library')
-  },
-
   ai: {
     status: () => apiFetch('/ai/status'),
     analyze: (id) => apiFetch(`/ai/analyze/${id}`, { method: 'POST' }),

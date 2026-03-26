@@ -32,18 +32,6 @@ export async function renderTemplates(container) {
       ${templates.map(renderTemplateCard).join('')}
     </div>
 
-    <div class="divider" style="margin:32px 0"></div>
-
-    <!-- Slide Library -->
-    <div class="view-header">
-      <div>
-        <h2 style="font-size:18px;font-weight:700">Slide Library</h2>
-        <p class="view-subtitle">Gespeicherte Einzelslides aus deinen Präsentationen</p>
-      </div>
-    </div>
-    <div id="slide-library-grid" class="presentations-grid">
-      <div class="loading-screen" style="height:100px"><div class="loading-orb" style="width:24px;height:24px"></div></div>
-    </div>
   `;
 
   document.getElementById('new-template-btn').addEventListener('click', showCreateModal);
@@ -76,8 +64,6 @@ export async function renderTemplates(container) {
     });
   });
 
-  // Load slide library
-  loadSlideLibrary();
 }
 
 function renderTemplateCard(t) {
@@ -109,31 +95,6 @@ function getTemplateEmoji(style) {
   return map[style] || '✦';
 }
 
-async function loadSlideLibrary() {
-  const grid = document.getElementById('slide-library-grid');
-  try {
-    const slides = await api.slideLibrary.list();
-    if (!slides.length) {
-      grid.innerHTML = `<div class="empty-state" style="padding:40px 0;grid-column:1/-1">
-        <div class="empty-state-icon">◈</div>
-        <div class="empty-state-title">Slide Library leer</div>
-        <div class="empty-state-desc">Speichere einzelne Slides aus deinen Präsentationen im Studio</div>
-      </div>`;
-      return;
-    }
-    grid.innerHTML = slides.map(s => `
-      <div class="card card-glow" style="display:flex;align-items:center;gap:12px">
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:600">${s.title}</div>
-          <div class="text-xs text-muted">${new Date(s.created_at).toLocaleDateString('de')}</div>
-        </div>
-        <div class="flex gap-8">
-          ${s.tags?.map(t => `<span class="tag">${t}</span>`).join('') || ''}
-        </div>
-      </div>
-    `).join('');
-  } catch {}
-}
 
 function showCreateModal() {
   showModal('Neues Template', buildTemplateForm(null), 'Definiere Stil und System-Prompt für Claude');

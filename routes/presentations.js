@@ -237,27 +237,6 @@ router.get('/:id/export/html', (req, res) => {
   res.send(row.html_content);
 });
 
-// ─── Slide Library: save a slide ─────────────────────────────────────────
-
-router.post('/:id/slides/save', (req, res) => {
-  const { slideIndex, title, tags } = req.body;
-  const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
-
-  // Extract slide HTML (simple regex extraction)
-  const slideMatches = row.html_content.match(/<div class="slide[^"]*"[^>]*>[\s\S]*?(?=<div class="slide|$)/g);
-  if (!slideMatches || slideIndex >= slideMatches.length) {
-    return res.status(400).json({ error: 'Slide not found' });
-  }
-
-  const id = uuid();
-  db.prepare(`
-    INSERT INTO slide_library (id, title, html_content, tags, source_presentation_id)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, title || `Slide ${slideIndex + 1}`, slideMatches[slideIndex], JSON.stringify(tags || []), req.params.id);
-
-  res.status(201).json({ id });
-});
 
 // ─── Public view (track analytics) ──────────────────────────────────────
 

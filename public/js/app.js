@@ -5,7 +5,6 @@ import { initModal } from './components/modal.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderStudio } from './views/studio.js';
 import { renderTemplates } from './views/templates.js';
-import { renderLibrary } from './views/library.js';
 import { renderSettings } from './views/settings.js';
 import { api } from './api.js';
 
@@ -14,7 +13,6 @@ import { api } from './api.js';
 registerView('dashboard', renderDashboard);
 registerView('studio', renderStudio);
 registerView('templates', renderTemplates);
-registerView('library', renderLibrary);
 registerView('settings', renderSettings);
 
 // ─── Initialize app ───────────────────────────────────────────────────────
