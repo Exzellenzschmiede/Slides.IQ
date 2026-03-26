@@ -8,7 +8,7 @@ const { parsePptxForTemplate } = require('../services/fileParser');
 const { analyzeTemplateFromPptx } = require('../services/claude');
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 function parseTemplate(row) {
   if (!row) return null;
@@ -70,7 +70,15 @@ router.delete('/:id', (req, res) => {
 });
 
 // Analyze PPTX and return template suggestion (does not save)
-router.post('/from-pptx', upload.single('file'), async (req, res) => {
+router.post('/from-pptx', (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Datei zu groß (max. 50 MB)' });
+    }
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
 
   const name = req.file.originalname || '';
