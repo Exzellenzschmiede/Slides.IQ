@@ -34,6 +34,18 @@ export async function renderSettings(container) {
           Der API Key wird über die Umgebungsvariable <code class="font-mono" style="background:var(--bg-input);padding:2px 6px;border-radius:4px">ANTHROPIC_API_KEY</code> gesetzt.
           Setze ihn in der <code class="font-mono" style="background:var(--bg-input);padding:2px 6px;border-radius:4px">.env</code> Datei oder als Docker-Variable.
         </div>
+        <div class="form-group" style="margin-top:16px">
+          <label class="form-label">Generierungsmodell</label>
+          <select class="form-select" id="pref-model">
+            ${[
+              ['claude-opus-4-6',          'Opus 4.6 — Stärkstes Modell'],
+              ['claude-opus-4-5',          'Opus 4.5'],
+              ['claude-sonnet-4-6',        'Sonnet 4.6 — Schneller & kosteneffizienter'],
+              ['claude-haiku-4-5-20251001','Haiku 4.5 — Schnellstes Modell'],
+            ].map(([v, l]) => `<option value="${v}" ${(prefs.mainModel || 'claude-opus-4-5') === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <div class="text-xs text-muted" style="margin-top:6px">Gilt für die Präsentationsgenerierung. Analyse-Funktionen nutzen immer Haiku.</div>
+        </div>
       </div>
 
       <!-- Brand Identity -->
@@ -138,7 +150,7 @@ export async function renderSettings(container) {
           </div>
           <div>
             <div class="form-label">Model</div>
-            <div class="font-mono" id="model-info">claude-opus-4-5</div>
+            <div class="font-mono" id="model-info">${prefs.mainModel || 'claude-opus-4-5'}</div>
           </div>
           <div>
             <div class="form-label">Datenbank</div>
@@ -189,7 +201,8 @@ export async function renderSettings(container) {
       },
       preferences: {
         defaultSlideCount: parseInt(document.getElementById('pref-slides').value),
-        language: document.getElementById('pref-lang').value
+        language: document.getElementById('pref-lang').value,
+        mainModel: document.getElementById('pref-model').value
       }
     };
 

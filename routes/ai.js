@@ -49,6 +49,11 @@ router.post('/generate/:presentationId', async (req, res) => {
   const brand = JSON.parse(row.brand || '{}');
   const conversation = JSON.parse(row.conversation || '[]');
 
+  // Read model from settings
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const model = prefs.mainModel || 'claude-opus-4-5';
+
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -67,7 +72,7 @@ router.post('/generate/:presentationId', async (req, res) => {
     let streamedText = '';
 
     const fullHtml = await generatePresentation(
-      { prompt, conversation, templateSystemPrompt, brand, attachments },
+      { prompt, conversation, templateSystemPrompt, brand, attachments, model },
       (chunk) => {
         streamedText += chunk;
         send({ type: 'chunk', text: chunk });
@@ -151,9 +156,11 @@ router.post('/suggest/:presentationId', async (req, res) => {
 // ─── Check API key ────────────────────────────────────────────────────────
 
 router.get('/status', (req, res) => {
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
   res.json({
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,
-    model: 'claude-opus-4-5'
+    model: prefs.mainModel || 'claude-opus-4-5'
   });
 });
 

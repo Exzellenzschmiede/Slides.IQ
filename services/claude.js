@@ -372,7 +372,7 @@ Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, k
 
 // ─── Generation with streaming ────────────────────────────────────────────
 
-async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [] }, onChunk) {
+async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-opus-4-5' }, onChunk) {
   const anthropic = getClient();
   const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, brand);
 
@@ -412,7 +412,7 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
   let fullContent = '';
 
   const stream = await anthropic.messages.stream({
-    model: 'claude-opus-4-5',
+    model,
     max_tokens: 16000,
     system: sysPrompt,
     messages
