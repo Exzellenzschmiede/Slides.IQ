@@ -279,6 +279,15 @@ ${templateSystemPrompt}
 
 ${brandSection}
 
+## ⚠️ VOLLSTÄNDIGKEIT — OBERSTE PRIORITÄT
+
+BEVOR du anfängst: Plane die genaue Anzahl der Slides und schätze die Ausgabelänge. Halte dich daran:
+- CSS KOMPAKT schreiben — maximal 1 @keyframes-Block, keine Redundanzen, keine langen Kommentare
+- Lieber 2 visuelle Effekte weniger als eine fehlende Slide
+- Jede Slide MUSS vollständig abgeschlossen sein (öffnender und schließender </div>)
+- Das letzte Element deiner Ausgabe MUSS </body></html> sein
+- Starte die Slides SOFORT nach dem </style> — kein unnötiger Whitespace
+
 ## TECHNISCHE ANFORDERUNGEN
 
 ### HTML-Struktur — EXAKT SO (keine Abweichungen):
@@ -361,13 +370,13 @@ Format: "Kernbotschaft dieser Slide. Was betonen? Übergangssatz zur nächsten S
 
 ### Qualitätsstandards:
 - Jede Slide ist visuell einzigartig aber kohärent im Gesamtstil
-- Mindestens 6, maximal 20 Slides
+- Mindestens 6, maximal 12 Slides — plane realistisch, Vollständigkeit vor Quantität
 - Text: kurz, prägnant, impactvoll (kein Wall of Text)
 - Typografische Hierarchie (H1 > H2 > Body)
 - Visuelle "Aha-Momente" — mindestens einer pro 3 Slides
 
 ## AUSGABE
-Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, kein Codeblock. Beginne direkt mit <!DOCTYPE html>.`;
+Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, kein Codeblock. Beginne direkt mit <!DOCTYPE html>. Deine Ausgabe MUSS mit </body></html> enden.`;
 }
 
 // ─── Generation with streaming ────────────────────────────────────────────
@@ -410,10 +419,14 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
   ];
 
   let fullContent = '';
+  let stopReason = null;
+
+  // Model-specific token limits
+  const maxTokens = model.includes('haiku') ? 8000 : 32000;
 
   const stream = await anthropic.messages.stream({
     model,
-    max_tokens: 16000,
+    max_tokens: maxTokens,
     system: sysPrompt,
     messages
   });
@@ -423,11 +436,14 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
       fullContent += chunk.delta.text;
       if (onChunk) onChunk(chunk.delta.text);
     }
+    if (chunk.type === 'message_delta' && chunk.delta.stop_reason) {
+      stopReason = chunk.delta.stop_reason;
+    }
   }
 
-  // Inject the navigation framework
+  // Inject the navigation framework (includes HTML repair)
   const finalHtml = injectFramework(fullContent);
-  return finalHtml;
+  return { html: finalHtml, stopReason };
 }
 
 function stripFramework(html) {
@@ -459,6 +475,26 @@ function stripFramework(html) {
   return html;
 }
 
+// ─── HTML repair: close truncated output ─────────────────────────────────
+
+function repairHtml(html) {
+  if (/<\/html>/i.test(html)) return html; // already complete
+
+  // Balance open/closed divs in the body section to close truncated slides
+  const bodyIdx = html.search(/<body/i);
+  const bodyPart = bodyIdx >= 0 ? html.slice(bodyIdx) : html;
+  const opens  = (bodyPart.match(/<div[\s>]/gi) || []).length;
+  const closes = (bodyPart.match(/<\/div>/gi) || []).length;
+  const diff   = Math.max(0, opens - closes);
+
+  let closing = '';
+  for (let i = 0; i < diff; i++) closing += '\n</div>';
+  if (!/<\/body>/i.test(html)) closing += '\n</body>';
+  closing += '\n</html>';
+
+  return html + closing;
+}
+
 function injectFramework(rawHtml) {
   let html = rawHtml.trim();
 
@@ -471,12 +507,14 @@ function injectFramework(rawHtml) {
   html = html.replace(/\[NEXUS_FRAMEWORK\]/g, '');
   html = stripFramework(html);
 
-  // Always inject the current framework before </body>
-  if (html.includes('</body>')) {
-    html = html.replace('</body>', '\n' + PRESENTATION_FRAMEWORK + '\n</body>');
-  } else {
-    html = html + '\n' + PRESENTATION_FRAMEWORK;
-  }
+  // Repair truncated HTML before injecting the framework
+  html = repairHtml(html);
+
+  // Inject framework before </body>
+  html = html.replace(/<\/body>/i, '\n' + PRESENTATION_FRAMEWORK + '\n</body>');
+
+  // Guarantee closing tags after injection
+  if (!/<\/html>/i.test(html)) html += '\n</html>';
 
   return html;
 }

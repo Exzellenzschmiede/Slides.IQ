@@ -393,6 +393,8 @@ async function sendMessage() {
         if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
       } else if (event.type === 'done') {
         currentPresentation.slide_count = event.slide_count;
+      } else if (event.type === 'warning') {
+        toastError(event.message);
       } else if (event.type === 'error') {
         throw new Error(event.message);
       }

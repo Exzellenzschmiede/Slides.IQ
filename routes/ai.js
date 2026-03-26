@@ -71,13 +71,17 @@ router.post('/generate/:presentationId', async (req, res) => {
 
     let streamedText = '';
 
-    const fullHtml = await generatePresentation(
+    const { html: fullHtml, stopReason } = await generatePresentation(
       { prompt, conversation, templateSystemPrompt, brand, attachments, model },
       (chunk) => {
         streamedText += chunk;
         send({ type: 'chunk', text: chunk });
       }
     );
+
+    if (stopReason === 'max_tokens') {
+      send({ type: 'warning', message: 'Das Ausgabelimit wurde erreicht — die Präsentation wurde automatisch vervollständigt. Wähle ein leistungsfähigeres Modell oder bitte um weniger Slides für bessere Ergebnisse.' });
+    }
 
     // Update conversation history
     const attachmentNote = attachments.length
