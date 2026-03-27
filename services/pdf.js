@@ -44,13 +44,22 @@ async function exportPdf(htmlContent, options = {}) {
 <style>${styles}</style>
 <style>
   @page { size: 1280px 720px; margin: 0; }
-  html, body { margin: 0; padding: 0; }
-  .slide-page { width: 1280px; height: 720px; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
+  /* Override framework body styles (display:flex, overflow:hidden) */
+  html, body {
+    margin: 0 !important; padding: 0 !important;
+    display: block !important; overflow: visible !important;
+    width: 1280px !important; height: auto !important;
+  }
+  .slide-page {
+    width: 1280px; height: 720px;
+    position: relative; overflow: hidden;
+    page-break-after: always; break-after: page;
+  }
   .slide-page:last-child { page-break-after: avoid; break-after: avoid; }
   .slide-page .slide {
     position: absolute !important; inset: 0 !important;
     opacity: 1 !important; transform: none !important;
-    pointer-events: all !important; display: flex !important;
+    transition: none !important;
     width: 1280px !important; height: 720px !important;
   }
   #nexus-controls, #speaker-notes-panel, #overview-panel { display: none !important; }
