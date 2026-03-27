@@ -510,7 +510,17 @@ html, body {
 
 .studio-sidebar {
   display: flex; flex-direction: column;
-  gap: 16px; overflow-y: auto;
+  gap: 16px; overflow: hidden;
+}
+
+.studio-chat-history {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow: hidden;
+}
+
+.studio-chat-input {
+  flex-shrink: 0;
 }
 
 .studio-preview {
@@ -552,7 +562,6 @@ html, body {
 .chat-messages {
   flex: 1; overflow-y: auto;
   display: flex; flex-direction: column; gap: 8px;
-  max-height: 300px;
   padding: 4px;
 }
 

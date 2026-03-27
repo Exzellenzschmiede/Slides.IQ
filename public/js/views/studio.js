@@ -97,24 +97,25 @@ function buildStudioHTML(p) {
     <!-- Left: AI Chat + Controls -->
     <div class="studio-sidebar">
 
-      <!-- Chat -->
-      <div class="card" style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <!-- Chat History -->
+      <div class="card studio-chat-history">
         <div class="flex items-center justify-between">
           <span class="form-label" style="margin-bottom:0">✦ AI Studio</span>
           <span class="text-xs text-muted" id="studio-model-label">Claude</span>
         </div>
-
         <div class="chat-messages" id="chat-messages">
           ${chatHistory || ''}
         </div>
-
         <div id="generating-indicator" style="display:none">
           <div class="generating-indicator">
             <div class="gen-dots"><span></span><span></span><span></span></div>
             <span id="generating-label">Claude generiert deine Präsentation…</span>
           </div>
         </div>
+      </div>
 
+      <!-- Chat Input -->
+      <div class="card studio-chat-input">
         <div class="chat-input-area">
           <!-- Slide mode banner -->
           <div class="slide-mode-banner" id="slide-mode-banner" style="display:none">
