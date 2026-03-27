@@ -3,6 +3,7 @@
 import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
 import { showModal, closeModal } from '../components/modal.js';
+import { initPasswordToggles } from '../utils/passwordToggle.js';
 
 export async function renderSettings(container) {
   let settings = {};
@@ -286,7 +287,12 @@ function showAddUserForm() {
     </div>
     <div class="form-group">
       <label class="form-label">Passwort (mind. 8 Zeichen)</label>
-      <input type="password" class="form-input" id="new-user-password">
+      <div class="password-wrapper">
+        <input type="password" class="form-input" id="new-user-password">
+        <button type="button" class="password-toggle" data-target="new-user-password" title="Passwort anzeigen/verstecken">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Rolle</label>
@@ -301,6 +307,8 @@ function showAddUserForm() {
       <button class="btn btn-primary" id="create-user-confirm-btn">Erstellen</button>
     </div>
   `);
+
+  initPasswordToggles(document);
 
   document.getElementById('create-user-confirm-btn')?.addEventListener('click', async () => {
     const errEl = document.getElementById('new-user-error');

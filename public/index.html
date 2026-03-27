@@ -104,7 +104,12 @@
         </div>
         <div class="form-group">
           <label class="form-label">Passwort</label>
-          <input type="password" class="form-input" id="auth-password" placeholder="••••••••" autocomplete="current-password">
+          <div class="password-wrapper">
+            <input type="password" class="form-input" id="auth-password" placeholder="••••••••" autocomplete="current-password">
+            <button type="button" class="password-toggle" data-target="auth-password" title="Passwort anzeigen/verstecken">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
         </div>
         <div id="auth-error" class="auth-error" style="display:none"></div>
         <button class="btn btn-primary" id="auth-login-btn" style="width:100%;margin-top:8px">Anmelden</button>
@@ -124,7 +129,12 @@
         </div>
         <div class="form-group">
           <label class="form-label">Passwort (mind. 8 Zeichen)</label>
-          <input type="password" class="form-input" id="setup-password" placeholder="••••••••">
+          <div class="password-wrapper">
+            <input type="password" class="form-input" id="setup-password" placeholder="••••••••">
+            <button type="button" class="password-toggle" data-target="setup-password" title="Passwort anzeigen/verstecken">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
         </div>
         <div id="setup-error" class="auth-error" style="display:none"></div>
         <button class="btn btn-primary" id="auth-setup-btn" style="width:100%;margin-top:8px">Admin-Account anlegen</button>

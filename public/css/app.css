@@ -314,6 +314,30 @@ html, body {
 
 .form-group { margin-bottom: 16px; }
 
+.password-wrapper {
+  position: relative;
+}
+.password-wrapper .form-input {
+  padding-right: 42px;
+}
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity var(--transition);
+}
+.password-toggle:hover { opacity: 1; }
+
 .form-label {
   display: block;
   font-size: 12px; font-weight: 600;

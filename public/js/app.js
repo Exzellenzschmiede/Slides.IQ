@@ -7,6 +7,7 @@ import { renderStudio } from './views/studio.js';
 import { renderTemplates } from './views/templates.js';
 import { renderSettings } from './views/settings.js';
 import { api } from './api.js';
+import { initPasswordToggles } from './utils/passwordToggle.js';
 
 // ─── Register views ───────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initModal();
   initParticles();
   initSidebarToggle();
+  initPasswordToggles(document);
 
   await initAuth();
 
