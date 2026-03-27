@@ -35,9 +35,9 @@ export function openSlideEditor(presentation, onSave) {
 function parsePresentation(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
-  // Collect all <style> tags except the injected framework styles
+  // Include ALL styles (incl. framework) so CSS variables and layout rules are available.
+  // Editor-specific overrides in buildSlideDoc will correct the positioning rules.
   state.styles = Array.from(doc.querySelectorAll('style'))
-    .filter(s => s.id !== 'nexus-engine-styles')
     .map(s => s.textContent)
     .join('\n');
 
@@ -224,30 +224,35 @@ function buildSlideDoc(slideOuterHTML) {
 <html>
 <head>
 <meta charset="UTF-8">
+<style>${state.styles}</style>
 <style>
+  /* ── Editor overrides (after all presentation styles) ── */
   *, *::before, *::after { box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
-  /* Force single-slide display mode */
-  .slide {
-    position: relative !important;
+  html, body {
+    width: 1280px; height: 720px;
+    margin: 0; padding: 0; overflow: hidden;
+  }
+  /* Show slide at full size, undoing framework show/hide logic */
+  .slide, #nexus-presentation .slide {
+    position: absolute !important;
+    inset: 0 !important;
     opacity: 1 !important;
+    pointer-events: all !important;
     transform: none !important;
-    display: block !important;
-    width: 100% !important;
-    height: 100% !important;
+    display: flex !important;
+    width: 1280px !important;
+    height: 720px !important;
     overflow: hidden;
   }
-  /* Subtle editable-element indicator on hover */
+  /* Hide framework chrome */
+  #nexus-controls, #speaker-notes-panel, #overview-panel { display: none !important; }
+  /* Editable hover indicator */
   [contenteditable="true"] *:hover {
-    outline: 1px dashed rgba(124, 58, 237, 0.45) !important;
-    outline-offset: 2px;
-    cursor: text;
+    outline: 1px dashed rgba(124,58,237,0.45) !important;
+    outline-offset: 2px; cursor: text;
   }
-  [contenteditable="true"]:focus-within {
-    outline: none !important;
-  }
+  [contenteditable="true"]:focus-within { outline: none !important; }
 </style>
-<style>${state.styles}</style>
 </head>
 <body>
 ${slideOuterHTML}
