@@ -71,7 +71,7 @@ function renderOverlay() {
   el.innerHTML = `
     <div class="se-header">
       <div class="se-header-left">
-        <button class="btn btn-ghost btn-sm" id="se-close">✕ Schließen</button>
+        <button class="presenter-close" id="se-close">✕ Schließen</button>
         <span class="se-title">Folien bearbeiten</span>
         <span class="se-badge">${total} Folien</span>
       </div>
