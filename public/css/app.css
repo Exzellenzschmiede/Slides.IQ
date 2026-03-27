@@ -446,6 +446,25 @@ html, body {
   height: calc(100vh - 64px);
 }
 
+/* ── Studio Back Button ── */
+.studio-back-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.studio-back-btn:hover {
+  color: var(--text);
+  border-color: var(--primary-light);
+  background: rgba(124,58,237,0.1);
+  transform: translateX(-2px);
+}
+
 /* ── Studio Dropdowns ── */
 .studio-dropdown {
   position: relative;

@@ -55,7 +55,9 @@ function buildStudioHTML(p) {
 
   return `
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-    <button class="btn btn-ghost btn-sm" onclick="window.history.back()">← Zurück</button>
+    <button class="studio-back-btn" onclick="window.history.back()" title="Zurück zu Meine Slides">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
     <div>
       <h1 class="view-title" style="font-size:18px" id="studio-title">${escHtml(p.title)}</h1>
       <p class="view-subtitle" id="studio-meta">${p.slide_count || 0} Slides · zuletzt ${formatDate(p.updated_at)}</p>
