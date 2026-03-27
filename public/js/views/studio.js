@@ -270,12 +270,12 @@ function buildSlideNavigator() {
 
   nav.innerHTML = html;
 
-  // Tile click → navigate iframe
+  // Tile click → activate scoped edit mode + navigate iframe
   nav.querySelectorAll('.slide-tile').forEach(tile => {
     tile.addEventListener('click', (e) => {
       if (e.target.closest('.slide-tile-actions')) return; // ignore action clicks
       const idx = parseInt(tile.dataset.index);
-      gotoIframeSlide(idx);
+      activateSlideScopedMode(idx);
     });
   });
 
