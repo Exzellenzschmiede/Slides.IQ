@@ -51,7 +51,7 @@ export async function renderDashboard(container) {
   container.innerHTML = `
     <div class="view-header">
       <div>
-        <h1 class="view-title">Dashboard</h1>
+        <h1 class="view-title">Meine Slides</h1>
         <p class="view-subtitle">${presentations.length} Präsentation${presentations.length !== 1 ? 'en' : ''}</p>
       </div>
       <div class="flex gap-8">

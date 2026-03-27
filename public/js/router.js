@@ -22,9 +22,10 @@ export function initRouter(container) {
   async function render() {
     const { view, id } = parseRoute();
 
-    // Update nav
+    // Update nav — studio is a sub-view of dashboard ("Meine Slides")
+    const activeNav = view === 'studio' ? 'dashboard' : view;
     document.querySelectorAll('.nav-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.view === view);
+      item.classList.toggle('active', item.dataset.view === activeNav);
     });
 
     // Render view
