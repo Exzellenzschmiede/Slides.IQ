@@ -21,11 +21,17 @@ const PRESENTATION_FRAMEWORK = `${FRAMEWORK_START}
 <style id="nexus-engine-styles">
 /* ═══ SLIDES.IQ PRESENTATION ENGINE (embedded) ═══ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; overflow: hidden; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
 body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var(--bg, #05070f); color: var(--text, #e2e8f0); }
 
 #nexus-presentation {
-  position: fixed; inset: 0; overflow: hidden;
+  position: relative;
+  width: 1280px; height: 720px;
+  overflow: hidden; flex-shrink: 0;
+  transform-origin: center center;
 }
 
 /* High-specificity rules so Claude's generated CSS cannot override show/hide */
@@ -256,6 +262,17 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     if (e.data && e.data.type === 'nexus-next') goto(current + 1);
     if (e.data && e.data.type === 'nexus-prev') goto(current - 1);
   });
+
+  // Viewport scaling — always render at 1280×720, scale to fit
+  function scalePresentation() {
+    var pres = document.getElementById('nexus-presentation');
+    if (!pres) return;
+    var controlsH = document.getElementById('nexus-controls') ? 56 : 0;
+    var scale = Math.min(window.innerWidth / 1280, (window.innerHeight - controlsH) / 720);
+    pres.style.transform = 'scale(' + scale + ')';
+  }
+  scalePresentation();
+  window.addEventListener('resize', scalePresentation);
 
   // Init
   goto(0);
