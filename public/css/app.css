@@ -91,10 +91,10 @@ html, body {
   padding: 0 20px 24px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .sidebar-toggle {
-  margin-left: auto;
   flex-shrink: 0;
   background: none;
   border: 1px solid var(--border);
@@ -106,6 +106,7 @@ html, body {
   cursor: pointer;
   transition: all var(--transition);
   line-height: 1;
+  margin-top: 10px;
 }
 .sidebar-toggle:hover { color: var(--text); border-color: var(--primary-light); }
 
@@ -117,8 +118,8 @@ html, body {
 #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
 #sidebar.collapsed .sidebar-nav { padding: 16px 8px; }
 #sidebar.collapsed .sidebar-logo { padding: 0 0 24px; justify-content: center; }
-#sidebar.collapsed .sidebar-footer { padding: 16px 0 0; display: flex; justify-content: center; }
-#sidebar.collapsed .sidebar-toggle { margin-left: 0; transform: rotate(180deg); }
+#sidebar.collapsed .sidebar-footer { padding: 16px 0 0; display: flex; flex-direction: column; align-items: center; }
+#sidebar.collapsed .sidebar-toggle { margin-top: 10px; transform: rotate(180deg); }
 
 .logo-icon {
   width: 36px; height: 36px;
