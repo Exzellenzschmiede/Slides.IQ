@@ -12,7 +12,7 @@ const router = express.Router();
 
 router.get('/setup-needed', (req, res) => {
   const count = db.prepare('SELECT COUNT(*) as c FROM users').get();
-  res.json({ needed: count.c === 0 });
+  res.json({ setupNeeded: count.c === 0 });
 });
 
 router.post('/setup', async (req, res) => {
