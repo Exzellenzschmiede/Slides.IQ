@@ -18,8 +18,8 @@ const FRAMEWORK_START = '<!-- SLIDESIQ:FRAMEWORK:START -->';
 const FRAMEWORK_END   = '<!-- SLIDESIQ:FRAMEWORK:END -->';
 
 const PRESENTATION_FRAMEWORK = `${FRAMEWORK_START}
-/* ═══ SLIDES.IQ PRESENTATION ENGINE (embedded) ═══ */
 <style id="nexus-engine-styles">
+/* ═══ SLIDES.IQ PRESENTATION ENGINE (embedded) ═══ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; overflow: hidden; }
 body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var(--bg, #05070f); color: var(--text, #e2e8f0); }
