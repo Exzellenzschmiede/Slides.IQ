@@ -173,13 +173,6 @@ function buildStudioHTML(p) {
       </div>
       ` : ''}
 
-      <div class="preview-actions">
-        <span class="text-xs text-muted">Vorschau</span>
-        <div style="flex:1"></div>
-        ${currentPresentation.html_content ? `
-          <button class="btn btn-ghost btn-sm" id="btn-suggest">◎ Verbesserungen</button>
-        ` : ''}
-      </div>
     </div>
   </div>
   `;
