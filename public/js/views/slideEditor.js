@@ -136,6 +136,12 @@ function renderOverlay() {
   buildSlideList();
   bindEvents();
   loadSlide(0);
+
+  // Scale iframe to fit editor area
+  const area = el.querySelector('.se-editor-area');
+  const ro = new ResizeObserver(() => scaleEditorIframe(area));
+  ro.observe(area);
+  scaleEditorIframe(area);
 }
 
 // ─── Slide List ───────────────────────────────────────────────────────────
@@ -392,6 +398,20 @@ function markDirty() {
   state.isDirty = true;
   const dirty = document.getElementById('se-dirty');
   if (dirty) dirty.style.display = 'inline';
+}
+
+function scaleEditorIframe(area) {
+  const iframe = document.getElementById('se-iframe');
+  if (!area || !iframe) return;
+  const pad = 20;
+  const availW = area.clientWidth - pad * 2;
+  const availH = area.clientHeight - pad * 2;
+  const scale = Math.min(availW / 1280, availH / 720);
+  const scaledW = 1280 * scale;
+  const scaledH = 720 * scale;
+  iframe.style.transform = `scale(${scale})`;
+  iframe.style.left = `${(area.clientWidth - scaledW) / 2}px`;
+  iframe.style.top = `${(area.clientHeight - scaledH) / 2}px`;
 }
 
 function esc(str) {
