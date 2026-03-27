@@ -6,110 +6,74 @@ const os = require('os');
 const fs = require('fs');
 
 async function exportPdf(htmlContent, options = {}) {
-  const {
-    format = 'A4',
-    landscape = true,
-    printBackground = true,
-    slideCount
-  } = options;
+  const { printBackground = true } = options;
 
-  // Write HTML to temp file
   const tmpFile = path.join(os.tmpdir(), `nexus-${Date.now()}.html`);
   fs.writeFileSync(tmpFile, htmlContent, 'utf8');
 
   const browser = await puppeteer.launch({
     headless: 'new',
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu'
-    ]
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
 
   try {
-    const page = await browser.newPage();
+    // Step 1: Load presentation, extract slides + styles via DOM
+    const extractPage = await browser.newPage();
+    await extractPage.setViewport({ width: 1280, height: 720 });
+    await extractPage.goto(`file://${tmpFile}`, { waitUntil: 'networkidle0', timeout: 30000 });
+    await new Promise(r => setTimeout(r, 300));
 
-    // Set viewport to 16:9 presentation aspect ratio
-    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 2 });
-
-    await page.goto(`file://${tmpFile}`, { waitUntil: 'networkidle0', timeout: 30000 });
-
-    // Wait for animations to settle
-    await new Promise(r => setTimeout(r, 500));
-
-    // Get all slides and render each as a page
-    const slides = await page.$$('.slide');
-    const pdfBuffers = [];
-
-    for (let i = 0; i < slides.length; i++) {
-      // Navigate to slide
-      await page.evaluate((index) => {
-        const slides = document.querySelectorAll('.slide');
-        slides.forEach((s, j) => {
-          s.style.opacity = j === index ? '1' : '0';
-          s.style.transform = 'none';
-          s.style.position = j === index ? 'relative' : 'absolute';
-          s.style.pointerEvents = j === index ? 'all' : 'none';
-        });
-        // Hide controls for PDF
-        const controls = document.getElementById('nexus-controls');
-        const notes = document.getElementById('speaker-notes-panel');
-        const overview = document.getElementById('overview-panel');
-        if (controls) controls.style.display = 'none';
-        if (notes) notes.style.display = 'none';
-        if (overview) overview.style.display = 'none';
-      }, i);
-
-      await new Promise(r => setTimeout(r, 100));
-
-      const pdf = await page.pdf({
-        format,
-        landscape,
-        printBackground,
-        margin: { top: 0, right: 0, bottom: 0, left: 0 }
-      });
-
-      pdfBuffers.push(pdf);
-    }
-
-    // For single-slide or simple export, just render all visible
-    if (pdfBuffers.length === 0) {
-      return await page.pdf({ format, landscape, printBackground });
-    }
-
-    // Return first slide's PDF for now (multi-page PDF merging would need pdf-lib)
-    // Simple approach: render all slides in a single page document
-    await page.evaluate(() => {
-      const presentation = document.getElementById('nexus-presentation');
-      const slides = document.querySelectorAll('.slide');
-      const controls = document.getElementById('nexus-controls');
-      const notes = document.getElementById('speaker-notes-panel');
-      const overview = document.getElementById('overview-panel');
-      if (controls) controls.remove();
-      if (notes) notes.remove();
-      if (overview) overview.remove();
-
-      // Make all slides visible stacked
-      if (presentation) {
-        presentation.style.cssText = 'position:static;display:block;';
-      }
-      slides.forEach(s => {
-        s.style.cssText = 'position:relative;opacity:1;transform:none;pointer-events:all;width:1280px;height:720px;display:flex;align-items:center;justify-content:center;page-break-after:always;';
-      });
-      document.body.style.overflow = 'auto';
-      document.documentElement.style.overflow = 'auto';
+    const { slidesHtml, styles } = await extractPage.evaluate(() => {
+      const slideEls = document.querySelectorAll('#nexus-presentation .slide');
+      const styleEls = document.querySelectorAll('style');
+      return {
+        slidesHtml: Array.from(slideEls).map(s => s.outerHTML),
+        styles: Array.from(styleEls).map(s => s.textContent).join('\n'),
+      };
     });
+    await extractPage.close();
 
-    const finalPdf = await page.pdf({
-      format,
-      landscape,
+    if (slidesHtml.length === 0) throw new Error('Keine Folien gefunden');
+
+    // Step 2: Build clean print document — one .slide-page per slide, no framework JS
+    const printDoc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>${styles}</style>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  .slide-page { width: 1280px; height: 720px; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
+  .slide-page:last-child { page-break-after: avoid; break-after: avoid; }
+  .slide-page .slide {
+    position: absolute !important; inset: 0 !important;
+    opacity: 1 !important; transform: none !important;
+    pointer-events: all !important; display: flex !important;
+    width: 1280px !important; height: 720px !important;
+  }
+  #nexus-controls, #speaker-notes-panel, #overview-panel { display: none !important; }
+</style>
+</head>
+<body>
+${slidesHtml.map(s => `<div class="slide-page">${s}</div>`).join('\n')}
+</body>
+</html>`;
+
+    // Step 3: Render print document to PDF
+    const printPage = await browser.newPage();
+    await printPage.setContent(printDoc, { waitUntil: 'networkidle0' });
+    await new Promise(r => setTimeout(r, 300));
+
+    const pdf = await printPage.pdf({
+      width: '1280px',
+      height: '720px',
       printBackground,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 }
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });
 
-    return finalPdf;
+    return pdf;
   } finally {
     await browser.close();
     try { fs.unlinkSync(tmpFile); } catch {}
