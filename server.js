@@ -9,7 +9,8 @@ const http = require('http');
 const WebSocket = require('ws');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+const BetterSqliteStore = require('better-sqlite3-session-store')(session);
+const Database = require('better-sqlite3');
 
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 
@@ -52,8 +53,9 @@ wss.on('connection', (ws, req) => {
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 
+const sessionDb = new Database('./data/sessions.db');
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', dir: './data' }),
+  store: new BetterSqliteStore({ client: sessionDb }),
   secret: process.env.SESSION_SECRET || 'slides-iq-secret-change-me',
   resave: false,
   saveUninitialized: false,
