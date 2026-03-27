@@ -468,13 +468,18 @@ html, body {
 /* ── Studio Dropdowns ── */
 .studio-dropdown {
   position: relative;
+  min-width: 160px;
+}
+.studio-dropdown-trigger {
+  width: 100%;
+  justify-content: space-between;
 }
 .studio-dropdown-menu {
   display: none;
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  min-width: 160px;
+  min-width: 100%;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
