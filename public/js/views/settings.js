@@ -30,10 +30,6 @@ export async function renderSettings(container) {
           <label class="form-label">API Key Status</label>
           <div id="api-key-status" class="text-sm text-muted">Wird geprüft…</div>
         </div>
-        <div class="text-xs text-muted" style="margin-top:8px">
-          Der API Key wird über die Umgebungsvariable <code class="font-mono" style="background:var(--bg-input);padding:2px 6px;border-radius:4px">ANTHROPIC_API_KEY</code> gesetzt.
-          Setze ihn in der <code class="font-mono" style="background:var(--bg-input);padding:2px 6px;border-radius:4px">.env</code> Datei oder als Docker-Variable.
-        </div>
         <div class="form-group" style="margin-top:16px">
           <label class="form-label">Generierungsmodell</label>
           <select class="form-select" id="pref-model">
