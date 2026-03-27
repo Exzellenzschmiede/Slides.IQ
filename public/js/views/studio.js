@@ -97,15 +97,6 @@ function buildStudioHTML(p) {
     <!-- Left: AI Chat + Controls -->
     <div class="studio-sidebar">
 
-      <!-- Template selector -->
-      <div class="card" id="template-section">
-        <div class="flex items-center justify-between mb-8">
-          <span class="form-label" style="margin-bottom:0">Template</span>
-          <button class="btn btn-ghost btn-sm" id="btn-change-template">Ändern</button>
-        </div>
-        <div id="active-template-name" class="text-sm text-muted">Wird geladen…</div>
-      </div>
-
       <!-- Chat -->
       <div class="card" style="flex:1;display:flex;flex-direction:column;gap:12px">
         <div class="flex items-center justify-between">
