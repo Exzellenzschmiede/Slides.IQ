@@ -105,14 +105,7 @@ function buildStudioHTML(p) {
         </div>
 
         <div class="chat-messages" id="chat-messages">
-          ${chatHistory || `<div class="chat-message assistant">
-            Willkommen im AI Studio! Beschreibe deine Präsentation und ich erstelle sie für dich.
-            <br><br>
-            <strong>Beispiele:</strong><br>
-            • "Erstelle eine 10-slide Pitch-Deck über ein nachhaltiges Startup"<br>
-            • "Tech-Präsentation über Machine Learning für Einsteiger"<br>
-            • "Keynote über die Zukunft der Arbeit, 8 Slides, dramatischer Stil"
-          </div>`}
+          ${chatHistory || ''}
         </div>
 
         <div id="generating-indicator" style="display:none">
@@ -120,15 +113,6 @@ function buildStudioHTML(p) {
             <div class="gen-dots"><span></span><span></span><span></span></div>
             <span id="generating-label">Claude generiert deine Präsentation…</span>
           </div>
-        </div>
-
-        <!-- Quick prompts -->
-        <div style="display:flex;flex-wrap:wrap;gap:6px" id="quick-prompts">
-          ${QUICK_PROMPTS.map(q => `
-            <button class="btn btn-ghost btn-sm quick-prompt" data-prompt="${escHtml(q)}" style="font-size:11px;padding:4px 10px">
-              ${q}
-            </button>
-          `).join('')}
         </div>
 
         <div class="chat-input-area">
