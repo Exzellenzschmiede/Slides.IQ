@@ -106,7 +106,7 @@ html, body {
   cursor: pointer;
   transition: all var(--transition);
   line-height: 1;
-  margin-top: 10px;
+  margin-left: auto;
 }
 .sidebar-toggle:hover { color: var(--text); border-color: var(--primary-light); }
 
@@ -118,8 +118,8 @@ html, body {
 #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
 #sidebar.collapsed .sidebar-nav { padding: 16px 8px; }
 #sidebar.collapsed .sidebar-logo { padding: 0 0 24px; justify-content: center; }
-#sidebar.collapsed .sidebar-footer { padding: 16px 0 0; display: flex; flex-direction: column; align-items: center; }
-#sidebar.collapsed .sidebar-toggle { margin-top: 10px; transform: rotate(180deg); }
+#sidebar.collapsed .sidebar-footer { padding: 16px 0 0; justify-content: center; }
+#sidebar.collapsed .sidebar-toggle { margin-left: 0; transform: rotate(180deg); }
 
 .logo-icon {
   width: 36px; height: 36px;
@@ -174,6 +174,8 @@ html, body {
 .sidebar-footer {
   padding: 16px 20px 0;
   border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
 }
 
 .api-status {
