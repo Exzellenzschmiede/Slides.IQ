@@ -51,8 +51,13 @@ function parsePresentation(html) {
 }
 
 function getTitleFromSlide(outerHTML) {
-  const m = outerHTML.match(/<h[1-3][^>]*>([^<]{1,60})<\/h[1-3]>/i);
-  return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+  const doc = new DOMParser().parseFromString(outerHTML, 'text/html');
+  for (const sel of ['h1', 'h2', 'h3', 'h4', '[class*="title"]', '[class*="heading"]', 'p']) {
+    const el = doc.querySelector(sel);
+    const text = el?.textContent?.replace(/\s+/g, ' ').trim();
+    if (text && text.length >= 2) return text.slice(0, 60);
+  }
+  return '';
 }
 
 // ─── Overlay Rendering ────────────────────────────────────────────────────
