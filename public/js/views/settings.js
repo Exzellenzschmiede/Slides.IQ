@@ -133,26 +133,6 @@ export async function renderSettings(container) {
         </div>
       </div>
 
-      <!-- System Info -->
-      <div class="settings-section">
-        <div class="settings-section-title">System</div>
-      </div>
-      <div class="card" style="grid-column:span 2">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;font-size:13px">
-          <div>
-            <div class="form-label">Version</div>
-            <div class="font-mono">1.0.0</div>
-          </div>
-          <div>
-            <div class="form-label">Model</div>
-            <div class="font-mono" id="model-info">${prefs.mainModel || 'claude-sonnet-4-6'}</div>
-          </div>
-          <div>
-            <div class="form-label">Datenbank</div>
-            <div class="font-mono">SQLite</div>
-          </div>
-        </div>
-      </div>
     </div>
   `;
 
