@@ -231,18 +231,18 @@ function buildSlideDoc(slideOuterHTML) {
   html, body {
     width: 1280px; height: 720px;
     margin: 0; padding: 0; overflow: hidden;
+    display: block !important; /* undo framework's display:flex on body */
   }
-  /* Show slide at full size, undoing framework show/hide logic */
+  /* Only override show/hide + transform — leave display/padding/layout intact */
   .slide, #nexus-presentation .slide {
     position: absolute !important;
     inset: 0 !important;
+    width: 1280px !important;
+    height: 720px !important;
     opacity: 1 !important;
     pointer-events: all !important;
     transform: none !important;
-    display: flex !important;
-    width: 1280px !important;
-    height: 720px !important;
-    overflow: hidden;
+    transition: none !important;
   }
   /* Hide framework chrome */
   #nexus-controls, #speaker-notes-panel, #overview-panel { display: none !important; }
