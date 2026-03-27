@@ -923,34 +923,106 @@ async function showShare() {
   showModal('Präsentation teilen', '<div class="loading-screen" style="height:200px"><div class="loading-orb"></div></div>');
 
   try {
-    const share = await api.presentations.share(currentPresentation.id);
-    closeModal();
-    showModal('Präsentation teilen', `
-      <div class="qr-container">
-        <img src="${share.qrDataUrl}" alt="QR Code">
-        <div>
-          <div class="form-label">Öffentlicher Link</div>
-          <div class="share-url">${share.shareUrl}</div>
-        </div>
-        <div class="flex gap-8">
-          <button class="btn btn-accent" onclick="navigator.clipboard.writeText('${share.shareUrl}').then(()=>window.showCopySuccess())">
-            Kopieren
-          </button>
-          <button class="btn btn-ghost" onclick="window.revokeShare()">Link entfernen</button>
-        </div>
-        <div class="text-xs text-muted text-center">
-          Personen mit diesem Link können deine Präsentation anzeigen.<br>
-          Views werden getrackt (aktuell: ${currentPresentation.view_count || 0} Views).
-        </div>
-      </div>
-    `, 'Live Audience Mode — QR-Code scannen zum Folgen');
+    const [share, userShares] = await Promise.all([
+      api.presentations.share(currentPresentation.id),
+      api.shares.list(currentPresentation.id).catch(() => [])
+    ]);
 
-    window.showCopySuccess = () => toastSuccess('Link kopiert!');
-    window.revokeShare = async () => {
-      await api.presentations.unshare(currentPresentation.id);
+    const renderShareModal = async () => {
+      const shares = await api.shares.list(currentPresentation.id).catch(() => []);
       closeModal();
-      toastSuccess('Link entfernt');
+      showModal('Präsentation teilen', `
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <!-- Public link -->
+          <div>
+            <div class="form-label" style="margin-bottom:8px">Öffentlicher Link (QR-Code)</div>
+            <div class="qr-container" style="margin:0">
+              <img src="${share.qrDataUrl}" alt="QR Code">
+              <div>
+                <div class="share-url">${share.shareUrl}</div>
+                <div class="flex gap-8" style="margin-top:8px">
+                  <button class="btn btn-accent btn-sm" onclick="navigator.clipboard.writeText('${share.shareUrl}').then(()=>window.showCopySuccess())">Kopieren</button>
+                  <button class="btn btn-ghost btn-sm" onclick="window.revokeShare()">Entfernen</button>
+                </div>
+              </div>
+            </div>
+            <div class="text-xs text-muted" style="margin-top:6px">Jeder mit diesem Link kann die Präsentation anzeigen · ${currentPresentation.view_count || 0} Views</div>
+          </div>
+
+          <!-- User shares -->
+          <div>
+            <div class="form-label" style="margin-bottom:8px">Benutzer-Freigaben</div>
+            <div id="user-shares-list" style="margin-bottom:10px">
+              ${shares.length === 0
+                ? '<p class="text-muted text-xs">Noch keine Benutzer berechtigt.</p>'
+                : shares.map(s => `
+                  <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+                    <span style="flex:1;font-size:13px">${escHtml(s.name)} <span class="text-muted" style="font-size:11px">${escHtml(s.email)}</span></span>
+                    <select class="form-select" style="width:100px;padding:4px 8px;font-size:12px" onchange="window.__updateShare('${s.user_id}',this.value)">
+                      ${['read','write','delete'].map(p => `<option value="${p}" ${s.permission===p?'selected':''}>${p==='read'?'Lesen':p==='write'?'Bearbeiten':'Löschen'}</option>`).join('')}
+                    </select>
+                    <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 8px" onclick="window.__removeShare('${s.user_id}')">✕</button>
+                  </div>
+                `).join('')}
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="email" class="form-input" id="share-add-email" placeholder="E-Mail des Benutzers" style="flex:1;font-size:13px">
+              <select class="form-select" id="share-add-perm" style="width:110px;font-size:13px">
+                <option value="read">Lesen</option>
+                <option value="write">Bearbeiten</option>
+                <option value="delete">Löschen</option>
+              </select>
+              <button class="btn btn-primary btn-sm" id="share-add-btn" style="white-space:nowrap">Hinzufügen</button>
+            </div>
+            <div id="share-add-error" style="color:var(--danger);font-size:12px;margin-top:4px;display:none"></div>
+          </div>
+        </div>
+      `, 'Öffentlich teilen & Benutzer berechtigen');
+
+      window.showCopySuccess = () => toastSuccess('Link kopiert!');
+      window.revokeShare = async () => {
+        await api.presentations.unshare(currentPresentation.id);
+        closeModal();
+        toastSuccess('Link entfernt');
+      };
+
+      window.__updateShare = async (userId, permission) => {
+        try {
+          await api.shares.set(currentPresentation.id, userId, permission);
+          toastSuccess('Berechtigung aktualisiert');
+        } catch (err) { toastError(err.message); }
+      };
+
+      window.__removeShare = async (userId) => {
+        try {
+          await api.shares.remove(currentPresentation.id, userId);
+          toastSuccess('Freigabe entfernt');
+          renderShareModal();
+        } catch (err) { toastError(err.message); }
+      };
+
+      document.getElementById('share-add-btn')?.addEventListener('click', async () => {
+        const email = document.getElementById('share-add-email').value.trim();
+        const permission = document.getElementById('share-add-perm').value;
+        const errEl = document.getElementById('share-add-error');
+        errEl.style.display = 'none';
+        if (!email) return;
+
+        // Resolve email to userId via user list (admin) or error
+        try {
+          const users = await api.auth.users.list();
+          const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+          if (!user) { errEl.textContent = 'Benutzer nicht gefunden'; errEl.style.display = ''; return; }
+          await api.shares.set(currentPresentation.id, user.id, permission);
+          renderShareModal();
+        } catch (err) {
+          errEl.textContent = err.message;
+          errEl.style.display = '';
+        }
+      });
     };
+
+    renderShareModal();
   } catch (err) {
     closeModal();
     toastError('Fehler: ' + err.message);

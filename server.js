@@ -8,6 +8,10 @@ const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
 const rateLimit = require('express-rate-limit');
+const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
+
+const { requireAuth, requireAdmin } = require('./middleware/auth');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,7 +19,7 @@ const server = http.createServer(app);
 // ─── WebSocket for Live Audience Mode ────────────────────────────────────
 
 const wss = new WebSocket.Server({ server, path: '/ws' });
-const rooms = new Map(); // shareToken -> Set<WebSocket>
+const rooms = new Map();
 
 wss.on('connection', (ws, req) => {
   const token = new URL(req.url, 'http://x').searchParams.get('token');
@@ -27,7 +31,6 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data);
-      // Presenter broadcasts slide changes to all audience members
       if (msg.type === 'slide-change') {
         rooms.get(token)?.forEach(client => {
           if (client !== ws && client.readyState === WebSocket.OPEN) {
@@ -46,47 +49,80 @@ wss.on('connection', (ws, req) => {
 
 // ─── Middleware ───────────────────────────────────────────────────────────
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
+
+app.use(session({
+  store: new SQLiteStore({ db: 'sessions.db', dir: './data' }),
+  secret: process.env.SESSION_SECRET || 'slides-iq-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  }
+}));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rate limiting for AI generation (expensive)
+// ─── Rate limiting ────────────────────────────────────────────────────────
+
 const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many AI requests. Please wait.' }
 });
 
-// ─── API Routes ───────────────────────────────────────────────────────────
+// ─── Auth Routes (public) ─────────────────────────────────────────────────
 
-const presentationsRouter = require('./routes/presentations');
-const templatesRouter = require('./routes/templates');
-const aiRouter = require('./routes/ai');
+app.use('/api/auth', require('./routes/auth'));
 
-app.use('/api/presentations', presentationsRouter);
-app.use('/api/templates', templatesRouter);
-app.use('/api/ai', aiLimiter, aiRouter);
+// ─── Protected API Routes ─────────────────────────────────────────────────
 
-// ─── Framework Migration ───────────────────────────────────────────────────
+app.use('/api/presentations', requireAuth, require('./routes/presentations'));
+app.use('/api/templates', requireAuth, require('./routes/templates'));
+app.use('/api/ai', requireAuth, aiLimiter, require('./routes/ai'));
 
-app.post('/api/admin/migrate-frameworks', (req, res) => {
+// ─── Settings API (user-scoped) ───────────────────────────────────────────
+
+app.get('/api/settings', requireAuth, (req, res) => {
+  const db = require('./database');
+  const userId = req.session.userId;
+  const rows = db.prepare('SELECT key, value FROM settings WHERE user_id = ?').all(userId);
+  // Fall back to global settings (user_id = '') for keys not yet set by user
+  const globalRows = db.prepare("SELECT key, value FROM settings WHERE user_id = ''").all();
+  const global = Object.fromEntries(globalRows.map(r => [r.key, JSON.parse(r.value)]));
+  const user = Object.fromEntries(rows.map(r => [r.key, JSON.parse(r.value)]));
+  res.json({ ...global, ...user });
+});
+
+app.put('/api/settings', requireAuth, (req, res) => {
+  const db = require('./database');
+  const userId = req.session.userId;
+  const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value, user_id) VALUES (?, ?, ?)');
+  const updateMany = db.transaction((data) => {
+    for (const [key, value] of Object.entries(data)) {
+      upsert.run(key, JSON.stringify(value), userId);
+    }
+  });
+  updateMany(req.body);
+  res.json({ ok: true });
+});
+
+// ─── Admin: Framework migration ───────────────────────────────────────────
+
+app.post('/api/admin/migrate-frameworks', requireAdmin, (req, res) => {
   const db = require('./database');
   const { injectFramework } = require('./services/claude');
-
-  const rows = db.prepare(
-    'SELECT id, title, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ""'
-  ).all();
-
+  const rows = db.prepare('SELECT id, title, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ""').all();
   const results = [];
   for (const row of rows) {
     const fixedHtml = injectFramework(row.html_content);
     const slideCount = (fixedHtml.match(/class="slide(?:\s|")/g) || []).length;
-    db.prepare(
-      'UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime("now") WHERE id = ?'
-    ).run(fixedHtml, slideCount, row.id);
+    db.prepare('UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime("now") WHERE id = ?').run(fixedHtml, slideCount, row.id);
     results.push({ id: row.id, title: row.title, slide_count: slideCount });
   }
-
   res.json({ migrated: results.length, results });
 });
 
@@ -102,28 +138,6 @@ app.get('/view/:token', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(row.html_content);
 });
-
-// ─── Settings API ─────────────────────────────────────────────────────────
-
-app.get('/api/settings', (req, res) => {
-  const db = require('./database');
-  const rows = db.prepare('SELECT key, value FROM settings').all();
-  const settings = Object.fromEntries(rows.map(r => [r.key, JSON.parse(r.value)]));
-  res.json(settings);
-});
-
-app.put('/api/settings', (req, res) => {
-  const db = require('./database');
-  const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-  const updateMany = db.transaction((data) => {
-    for (const [key, value] of Object.entries(data)) {
-      upsert.run(key, JSON.stringify(value));
-    }
-  });
-  updateMany(req.body);
-  res.json({ ok: true });
-});
-
 
 // ─── SPA fallback ─────────────────────────────────────────────────────────
 

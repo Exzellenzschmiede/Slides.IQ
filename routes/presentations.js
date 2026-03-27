@@ -4,9 +4,36 @@ const express = require('express');
 const { v4: uuid } = require('uuid');
 const QRCode = require('qrcode');
 const db = require('../database');
-const { exportPdf, exportSlideImages } = require('../services/pdf');
+const { exportPdf } = require('../services/pdf');
 
 const router = express.Router();
+
+// ─── Permission helpers ───────────────────────────────────────────────────
+
+const LEVELS = { read: 1, write: 2, delete: 3 };
+
+function getAccess(presentationId, userId) {
+  const pres = db.prepare('SELECT user_id FROM presentations WHERE id = ?').get(presentationId);
+  if (!pres) return null;
+  if (pres.user_id === userId) return 'owner';
+  const share = db.prepare('SELECT permission FROM presentation_shares WHERE presentation_id = ? AND user_id = ?').get(presentationId, userId);
+  return share ? share.permission : null;
+}
+
+function canDo(access, required) {
+  if (!access) return false;
+  if (access === 'owner') return true;
+  return (LEVELS[access] || 0) >= (LEVELS[required] || 99);
+}
+
+function assertAccess(req, res, required) {
+  const access = getAccess(req.params.id, req.session.userId);
+  if (!canDo(access, required)) {
+    res.status(access === null ? 404 : 403).json({ error: 'Keine Berechtigung' });
+    return null;
+  }
+  return access;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -23,7 +50,6 @@ function parsePresentation(row) {
 
 function countSlides(html) {
   if (!html) return 0;
-  // Match only standalone class="slide" or class="slide active" — not class="slide-content" etc.
   const matches = html.match(/class="slide(?:\s+[^"]*)?"/g);
   if (!matches) return 0;
   return matches.filter(m => /class="slide(\s|")/.test(m)).length;
@@ -33,20 +59,33 @@ function countSlides(html) {
 
 router.get('/', (req, res) => {
   const { search, tag } = req.query;
-  let query = 'SELECT id, title, description, slide_count, tags, created_at, updated_at, share_token, view_count FROM presentations';
-  const params = [];
+  const userId = req.session.userId;
+
+  // Own + shared presentations
+  let query = `
+    SELECT p.id, p.title, p.description, p.slide_count, p.tags, p.created_at,
+           p.updated_at, p.share_token, p.view_count, p.user_id,
+           CASE WHEN p.user_id = ? THEN NULL ELSE ps.permission END AS shared_permission,
+           u.name AS owner_name
+    FROM presentations p
+    LEFT JOIN presentation_shares ps ON ps.presentation_id = p.id AND ps.user_id = ?
+    LEFT JOIN users u ON u.id = p.user_id
+    WHERE (p.user_id = ? OR ps.user_id = ?)
+  `;
+  const params = [userId, userId, userId, userId];
 
   if (search) {
-    query += ' WHERE (title LIKE ? OR description LIKE ?)';
+    query += ' AND (p.title LIKE ? OR p.description LIKE ?)';
     params.push(`%${search}%`, `%${search}%`);
   }
 
-  query += ' ORDER BY updated_at DESC';
+  query += ' ORDER BY p.updated_at DESC';
 
   const rows = db.prepare(query).all(...params);
   const result = rows.map(r => ({
     ...r,
-    tags: JSON.parse(r.tags || '[]')
+    tags: JSON.parse(r.tags || '[]'),
+    is_owner: r.user_id === userId,
   })).filter(r => !tag || r.tags.includes(tag));
 
   res.json(result);
@@ -60,9 +99,9 @@ router.post('/', (req, res) => {
 
   const id = uuid();
   db.prepare(`
-    INSERT INTO presentations (id, title, description, template_id, tags)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, title, description || '', template_id || null, JSON.stringify(tags || []));
+    INSERT INTO presentations (id, title, description, template_id, tags, user_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, title, description || '', template_id || null, JSON.stringify(tags || []), req.session.userId);
 
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(id);
   res.status(201).json(parsePresentation(row));
@@ -71,17 +110,26 @@ router.post('/', (req, res) => {
 // ─── Get one ─────────────────────────────────────────────────────────────
 
 router.get('/:id', (req, res) => {
+  if (!assertAccess(req, res, 'read')) return;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
   res.json(parsePresentation(row));
 });
 
-// ─── Update ───────────────────────────────────────────────────────────────
+// ─── Content preview (iframe) ─────────────────────────────────────────────
+
+router.get('/:id/content-preview', (req, res) => {
+  if (!assertAccess(req, res, 'read')) return;
+  const row = db.prepare('SELECT html_content FROM presentations WHERE id = ?').get(req.params.id);
+  if (!row?.html_content) return res.status(404).send('');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(row.html_content);
+});
+
+// ─── Update metadata ─────────────────────────────────────────────────────
 
 router.put('/:id', (req, res) => {
+  if (!assertAccess(req, res, 'write')) return;
   const { title, description, tags, brand } = req.body;
-  const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
 
   db.prepare(`
     UPDATE presentations SET
@@ -92,8 +140,7 @@ router.put('/:id', (req, res) => {
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
-    title || null,
-    description || null,
+    title || null, description || null,
     tags ? JSON.stringify(tags) : null,
     brand ? JSON.stringify(brand) : null,
     req.params.id
@@ -105,41 +152,21 @@ router.put('/:id', (req, res) => {
 // ─── Update HTML content ──────────────────────────────────────────────────
 
 router.put('/:id/content', (req, res) => {
+  if (!assertAccess(req, res, 'write')) return;
   const { html_content, conversation, save_version } = req.body;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
 
   let versions = JSON.parse(row.versions || '[]');
-
-  // Save version before updating
   if (save_version && row.html_content) {
-    versions.unshift({
-      id: uuid(),
-      timestamp: new Date().toISOString(),
-      html_content: row.html_content,
-      label: `Version ${versions.length + 1}`
-    });
-    // Keep max 20 versions
+    versions.unshift({ id: uuid(), timestamp: new Date().toISOString(), html_content: row.html_content, label: `Version ${versions.length + 1}` });
     versions = versions.slice(0, 20);
   }
 
   const slideCount = countSlides(html_content);
-
   db.prepare(`
-    UPDATE presentations SET
-      html_content = ?,
-      conversation = ?,
-      versions = ?,
-      slide_count = ?,
-      updated_at = datetime('now')
+    UPDATE presentations SET html_content = ?, conversation = ?, versions = ?, slide_count = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).run(
-    html_content,
-    conversation ? JSON.stringify(conversation) : row.conversation,
-    JSON.stringify(versions),
-    slideCount,
-    req.params.id
-  );
+  `).run(html_content, conversation ? JSON.stringify(conversation) : row.conversation, JSON.stringify(versions), slideCount, req.params.id);
 
   res.json({ ok: true, slide_count: slideCount });
 });
@@ -147,93 +174,76 @@ router.put('/:id/content', (req, res) => {
 // ─── Restore version ──────────────────────────────────────────────────────
 
 router.post('/:id/restore/:versionId', (req, res) => {
+  if (!assertAccess(req, res, 'write')) return;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-
   const versions = JSON.parse(row.versions || '[]');
   const version = versions.find(v => v.id === req.params.versionId);
   if (!version) return res.status(404).json({ error: 'Version not found' });
 
-  // Save current as version before restoring
-  versions.unshift({
-    id: uuid(),
-    timestamp: new Date().toISOString(),
-    html_content: row.html_content,
-    label: `(vor Restore) ${new Date().toLocaleString('de')}`
-  });
-
-  db.prepare(`
-    UPDATE presentations SET html_content = ?, versions = ?, updated_at = datetime('now')
-    WHERE id = ?
-  `).run(version.html_content, JSON.stringify(versions.slice(0, 20)), req.params.id);
-
+  versions.unshift({ id: uuid(), timestamp: new Date().toISOString(), html_content: row.html_content, label: `(vor Restore) ${new Date().toLocaleString('de')}` });
+  db.prepare('UPDATE presentations SET html_content = ?, versions = ?, updated_at = datetime(\'now\') WHERE id = ?')
+    .run(version.html_content, JSON.stringify(versions.slice(0, 20)), req.params.id);
   res.json({ ok: true });
 });
 
-// ─── Delete a single slide ────────────────────────────────────────────────
+// ─── Delete slide ─────────────────────────────────────────────────────────
 
 router.delete('/:id/slides/:slideIndex', (req, res) => {
+  if (!assertAccess(req, res, 'write')) return;
   const slideIndex = parseInt(req.params.slideIndex);
   if (isNaN(slideIndex)) return res.status(400).json({ error: 'Invalid slideIndex' });
 
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
+  if (!row?.html_content) return res.status(404).json({ error: 'Not found' });
 
   const { deleteSlideInHtml } = require('../services/slideUtils');
   const newHtml = deleteSlideInHtml(row.html_content, slideIndex);
   const slideCount = countSlides(newHtml);
 
   let versions = JSON.parse(row.versions || '[]');
-  versions.unshift({
-    id: uuid(),
-    timestamp: new Date().toISOString(),
-    html_content: row.html_content,
-    label: `v${versions.length + 1} — ${new Date().toLocaleString('de', { dateStyle: 'short', timeStyle: 'short' })}`
-  });
+  versions.unshift({ id: uuid(), timestamp: new Date().toISOString(), html_content: row.html_content, label: `v${versions.length + 1} — ${new Date().toLocaleString('de', { dateStyle: 'short', timeStyle: 'short' })}` });
 
-  db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
+  db.prepare('UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, updated_at = datetime(\'now\') WHERE id = ?')
     .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, req.params.id);
-
   res.json({ ok: true, slide_count: slideCount });
 });
 
-// ─── Duplicate a single slide ─────────────────────────────────────────────
+// ─── Duplicate slide ──────────────────────────────────────────────────────
 
 router.post('/:id/slides/:slideIndex/duplicate', (req, res) => {
+  if (!assertAccess(req, res, 'write')) return;
   const slideIndex = parseInt(req.params.slideIndex);
   if (isNaN(slideIndex)) return res.status(400).json({ error: 'Invalid slideIndex' });
 
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
+  if (!row?.html_content) return res.status(404).json({ error: 'Not found' });
 
   const { parseSlidesFromHtml, insertSlideInHtml } = require('../services/slideUtils');
   const slides = parseSlidesFromHtml(row.html_content);
   if (slideIndex < 0 || slideIndex >= slides.length) return res.status(400).json({ error: 'Invalid slideIndex' });
 
-  // Strip "active" class from duplicate so it doesn't conflict
   const dupHtml = slides[slideIndex].html.replace(/class="slide active"/, 'class="slide"');
   const newHtml = insertSlideInHtml(row.html_content, slideIndex, dupHtml);
   const slideCount = countSlides(newHtml);
 
-  db.prepare(`UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
+  db.prepare('UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime(\'now\') WHERE id = ?')
     .run(newHtml, slideCount, req.params.id);
-
   res.json({ ok: true, slide_count: slideCount, new_index: slideIndex + 1 });
 });
 
-// ─── Delete ───────────────────────────────────────────────────────────────
+// ─── Delete presentation ──────────────────────────────────────────────────
 
 router.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM presentations WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+  if (!assertAccess(req, res, 'delete')) return;
+  db.prepare('DELETE FROM presentations WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
-// ─── Share / QR Code ─────────────────────────────────────────────────────
+// ─── Public share (link + QR) ─────────────────────────────────────────────
 
 router.post('/:id/share', async (req, res) => {
+  if (!assertAccess(req, res, 'write')) return;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
 
   let token = row.share_token;
   if (!token) {
@@ -243,27 +253,70 @@ router.post('/:id/share', async (req, res) => {
 
   const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
   const shareUrl = `${baseUrl}/view/${token}`;
-
-  const qrDataUrl = await QRCode.toDataURL(shareUrl, {
-    width: 256,
-    margin: 2,
-    color: { dark: '#7c3aed', light: '#ffffff' }
-  });
-
+  const qrDataUrl = await QRCode.toDataURL(shareUrl, { width: 256, margin: 2, color: { dark: '#7c3aed', light: '#ffffff' } });
   res.json({ token, shareUrl, qrDataUrl });
 });
 
 router.delete('/:id/share', (req, res) => {
+  if (!assertAccess(req, res, 'write')) return;
   db.prepare('UPDATE presentations SET share_token = NULL WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── User shares ──────────────────────────────────────────────────────────
+
+// List shares for a presentation
+router.get('/:id/user-shares', (req, res) => {
+  if (!assertAccess(req, res, 'read')) return;
+  const shares = db.prepare(`
+    SELECT ps.id, ps.permission, ps.created_at, u.id as user_id, u.name, u.email
+    FROM presentation_shares ps
+    JOIN users u ON u.id = ps.user_id
+    WHERE ps.presentation_id = ?
+    ORDER BY ps.created_at ASC
+  `).all(req.params.id);
+  res.json(shares);
+});
+
+// Add or update a share
+router.put('/:id/user-shares/:userId', (req, res) => {
+  const access = assertAccess(req, res, 'write');
+  if (!access) return;
+  // Only owner can manage shares
+  if (access !== 'owner') return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
+
+  const { permission } = req.body;
+  if (!['read', 'write', 'delete'].includes(permission)) return res.status(400).json({ error: 'Ungültige Berechtigung' });
+  if (req.params.userId === req.session.userId) return res.status(400).json({ error: 'Kann nicht mit sich selbst teilen' });
+
+  const targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.userId);
+  if (!targetUser) return res.status(404).json({ error: 'User nicht gefunden' });
+
+  db.prepare(`
+    INSERT INTO presentation_shares (id, presentation_id, user_id, permission)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(presentation_id, user_id) DO UPDATE SET permission = excluded.permission
+  `).run(uuid(), req.params.id, req.params.userId, permission);
+
+  res.json({ ok: true });
+});
+
+// Remove a share
+router.delete('/:id/user-shares/:userId', (req, res) => {
+  const access = assertAccess(req, res, 'write');
+  if (!access) return;
+  if (access !== 'owner') return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
+
+  db.prepare('DELETE FROM presentation_shares WHERE presentation_id = ? AND user_id = ?').run(req.params.id, req.params.userId);
   res.json({ ok: true });
 });
 
 // ─── PDF Export ───────────────────────────────────────────────────────────
 
 router.get('/:id/export/pdf', async (req, res) => {
+  if (!assertAccess(req, res, 'read')) return;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  if (!row.html_content) return res.status(400).json({ error: 'No content yet' });
+  if (!row?.html_content) return res.status(400).json({ error: 'No content yet' });
 
   try {
     const pdfBuffer = await exportPdf(row.html_content, { landscape: true });
@@ -276,28 +329,16 @@ router.get('/:id/export/pdf', async (req, res) => {
   }
 });
 
-// ─── HTML Package Export ──────────────────────────────────────────────────
+// ─── HTML Export ──────────────────────────────────────────────────────────
 
 router.get('/:id/export/html', (req, res) => {
+  if (!assertAccess(req, res, 'read')) return;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  if (!row.html_content) return res.status(400).json({ error: 'No content yet' });
+  if (!row?.html_content) return res.status(400).json({ error: 'No content yet' });
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(row.title)}.html"`);
   res.send(row.html_content);
-});
-
-
-// ─── Public view (track analytics) ──────────────────────────────────────
-
-router.get('/view/:token', (req, res) => {
-  const row = db.prepare('SELECT * FROM presentations WHERE share_token = ?').get(req.params.token);
-  if (!row) return res.status(404).send('Presentation not found');
-
-  db.prepare('UPDATE presentations SET view_count = view_count + 1 WHERE id = ?').run(row.id);
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(row.html_content || '<h1>No content yet</h1>');
 });
 
 module.exports = router;

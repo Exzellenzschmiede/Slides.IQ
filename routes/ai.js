@@ -51,7 +51,7 @@ router.post('/generate/:presentationId', async (req, res) => {
   const conversation = JSON.parse(row.conversation || '[]');
 
   // Read model from settings
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
   const model = prefs.mainModel || 'claude-sonnet-4-6';
 
@@ -138,7 +138,7 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
 
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
   const model = prefs.mainModel || 'claude-sonnet-4-6';
 
@@ -198,7 +198,7 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
 
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
   const model = prefs.mainModel || 'claude-sonnet-4-6';
 
@@ -279,7 +279,7 @@ router.post('/suggest/:presentationId', async (req, res) => {
 // ─── Check API key ────────────────────────────────────────────────────────
 
 router.get('/status', (req, res) => {
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences'").get();
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
   res.json({
     hasApiKey: !!process.env.ANTHROPIC_API_KEY,

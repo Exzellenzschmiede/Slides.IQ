@@ -60,6 +60,10 @@
       </div>
 
       <div class="sidebar-footer">
+        <div class="sidebar-user" id="sidebar-user">
+          <span class="sidebar-user-name" id="sidebar-user-name"></span>
+          <button class="sidebar-logout-btn" id="sidebar-logout-btn" title="Abmelden">⏻</button>
+        </div>
         <button class="sidebar-toggle" id="sidebar-toggle" title="Sidebar einklappen">‹</button>
       </div>
     </nav>
@@ -81,6 +85,50 @@
     <div id="modal-container" class="modal-container">
       <button id="modal-close" class="modal-close">✕</button>
       <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Auth Overlay -->
+  <div id="auth-overlay" class="auth-overlay">
+    <div class="auth-box">
+      <div class="auth-logo">
+        <span class="logo-text">Slides<span class="logo-iq">.IQ</span></span>
+      </div>
+
+      <!-- Login Form -->
+      <div id="auth-login-form">
+        <h2 class="auth-title">Anmelden</h2>
+        <div class="form-group">
+          <label class="form-label">E-Mail</label>
+          <input type="email" class="form-input" id="auth-email" placeholder="name@firma.de" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Passwort</label>
+          <input type="password" class="form-input" id="auth-password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div id="auth-error" class="auth-error" style="display:none"></div>
+        <button class="btn btn-primary" id="auth-login-btn" style="width:100%;margin-top:8px">Anmelden</button>
+      </div>
+
+      <!-- Setup Form (first run) -->
+      <div id="auth-setup-form" style="display:none">
+        <h2 class="auth-title">Erstkonfiguration</h2>
+        <p class="auth-subtitle">Lege den ersten Admin-Account an.</p>
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-input" id="setup-name" placeholder="Max Mustermann">
+        </div>
+        <div class="form-group">
+          <label class="form-label">E-Mail</label>
+          <input type="email" class="form-input" id="setup-email" placeholder="admin@firma.de">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Passwort (mind. 8 Zeichen)</label>
+          <input type="password" class="form-input" id="setup-password" placeholder="••••••••">
+        </div>
+        <div id="setup-error" class="auth-error" style="display:none"></div>
+        <button class="btn btn-primary" id="auth-setup-btn" style="width:100%;margin-top:8px">Admin-Account anlegen</button>
+      </div>
     </div>
   </div>
 

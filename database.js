@@ -15,6 +15,24 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS presentation_shares (
+    id TEXT PRIMARY KEY,
+    presentation_id TEXT NOT NULL REFERENCES presentations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    permission TEXT NOT NULL DEFAULT 'read',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(presentation_id, user_id)
+  );
+
   CREATE TABLE IF NOT EXISTS templates (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -59,11 +77,13 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_presentations_updated ON presentations(updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_presentations_share ON presentations(share_token);
+  CREATE INDEX IF NOT EXISTS idx_shares_user ON presentation_shares(user_id);
+  CREATE INDEX IF NOT EXISTS idx_shares_presentation ON presentation_shares(presentation_id);
 `);
 
 // Schema migrations — add columns that may be missing in older DB instances
 // SQLite has no ADD COLUMN IF NOT EXISTS, so we catch the "duplicate column" error
-const presentationMigrations = [
+const migrations = [
   "ALTER TABLE presentations ADD COLUMN html_content TEXT",
   "ALTER TABLE presentations ADD COLUMN slide_count INTEGER DEFAULT 0",
   "ALTER TABLE presentations ADD COLUMN conversation TEXT NOT NULL DEFAULT '[]'",
@@ -74,8 +94,10 @@ const presentationMigrations = [
   "ALTER TABLE presentations ADD COLUMN brand TEXT DEFAULT '{}'",
   "ALTER TABLE presentations ADD COLUMN description TEXT",
   "ALTER TABLE presentations ADD COLUMN template_id TEXT",
+  "ALTER TABLE presentations ADD COLUMN user_id TEXT REFERENCES users(id)",
+  "ALTER TABLE settings ADD COLUMN user_id TEXT NOT NULL DEFAULT ''",
 ];
-for (const sql of presentationMigrations) {
+for (const sql of migrations) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
 }
 

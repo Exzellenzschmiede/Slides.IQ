@@ -22,6 +22,7 @@ function renderCard(p) {
         }
         ${p.slide_count > 0 ? `<div class="slide-count-badge">⊡ ${p.slide_count} Slides</div>` : ''}
         ${p.share_token ? '<div class="slide-count-badge" style="bottom:8px;left:8px;right:auto">🔗 Geteilt</div>' : ''}
+        ${!p.is_owner ? `<div class="slide-count-badge" style="top:8px;left:8px;right:auto;background:rgba(124,58,237,.8)">${p.shared_permission === 'write' ? '✏' : p.shared_permission === 'delete' ? '⚙' : '👁'} ${p.owner_name || 'Geteilt'}</div>` : ''}
       </div>
       <div class="presentation-card-body">
         <div class="presentation-card-title" title="${p.title}">${p.title}</div>
@@ -35,7 +36,7 @@ function renderCard(p) {
             <button class="btn btn-ghost btn-sm" onclick="window.nexusPresent('${p.id}')">▶ Präsent.</button>
             <button class="btn btn-ghost btn-sm" onclick="window.nexusExportPdf('${p.id}', '${p.title}')">↓ PDF</button>
           ` : ''}
-          <button class="btn btn-ghost btn-sm" onclick="window.nexusDeletePresentation('${p.id}')" style="margin-left:auto">✕</button>
+          ${p.is_owner ? `<button class="btn btn-ghost btn-sm" onclick="window.nexusDeletePresentation('${p.id}')" style="margin-left:auto">✕</button>` : ''}
         </div>
       </div>
     </div>

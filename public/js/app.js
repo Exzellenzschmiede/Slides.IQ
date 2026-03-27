@@ -17,11 +17,12 @@ registerView('settings', renderSettings);
 
 // ─── Initialize app ───────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initModal();
   initParticles();
-  checkApiStatus();
   initSidebarToggle();
+
+  await initAuth();
 
   const container = document.getElementById('view-container');
   initRouter(container);
@@ -34,6 +35,126 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+// ─── Auth Bootstrap ───────────────────────────────────────────────────────
+
+async function initAuth() {
+  const overlay = document.getElementById('auth-overlay');
+  const loginForm = document.getElementById('auth-login-form');
+  const setupForm = document.getElementById('auth-setup-form');
+
+  // Check if first-run setup is needed
+  let setupNeeded = false;
+  try {
+    const res = await api.auth.setupNeeded();
+    setupNeeded = res.setupNeeded;
+  } catch {}
+
+  if (setupNeeded) {
+    loginForm.style.display = 'none';
+    setupForm.style.display = '';
+    overlay.classList.remove('hidden');
+    await waitForSetup();
+    overlay.classList.add('hidden');
+    return;
+  }
+
+  // Check if already logged in
+  try {
+    const user = await api.auth.me();
+    setCurrentUser(user);
+    overlay.classList.add('hidden');
+    checkApiStatus();
+    return;
+  } catch {}
+
+  // Show login
+  overlay.classList.remove('hidden');
+  await waitForLogin();
+  overlay.classList.add('hidden');
+  checkApiStatus();
+}
+
+function waitForLogin() {
+  return new Promise((resolve) => {
+    const btn = document.getElementById('auth-login-btn');
+    const emailEl = document.getElementById('auth-email');
+    const passEl = document.getElementById('auth-password');
+    const errEl = document.getElementById('auth-error');
+
+    async function tryLogin() {
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Anmelden…';
+      try {
+        const user = await api.auth.login({ email: emailEl.value.trim(), password: passEl.value });
+        setCurrentUser(user);
+        btn.disabled = false;
+        btn.textContent = 'Anmelden';
+        resolve();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = '';
+        btn.disabled = false;
+        btn.textContent = 'Anmelden';
+      }
+    }
+
+    btn.addEventListener('click', tryLogin);
+    [emailEl, passEl].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); }));
+  });
+}
+
+function waitForSetup() {
+  return new Promise((resolve) => {
+    const btn = document.getElementById('auth-setup-btn');
+    const nameEl = document.getElementById('setup-name');
+    const emailEl = document.getElementById('setup-email');
+    const passEl = document.getElementById('setup-password');
+    const errEl = document.getElementById('setup-error');
+
+    async function trySetup() {
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Wird erstellt…';
+      try {
+        const user = await api.auth.setup({
+          name: nameEl.value.trim(),
+          email: emailEl.value.trim(),
+          password: passEl.value
+        });
+        setCurrentUser(user);
+        btn.disabled = false;
+        btn.textContent = 'Admin-Account anlegen';
+        resolve();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = '';
+        btn.disabled = false;
+        btn.textContent = 'Admin-Account anlegen';
+      }
+    }
+
+    btn.addEventListener('click', trySetup);
+  });
+}
+
+function setCurrentUser(user) {
+  const nameEl = document.getElementById('sidebar-user-name');
+  if (nameEl) nameEl.textContent = user.name || user.email;
+
+  // Store role for settings view
+  window.__currentUser = user;
+
+  // Logout button
+  const logoutBtn = document.getElementById('sidebar-logout-btn');
+  if (logoutBtn) {
+    logoutBtn.onclick = async () => {
+      await api.auth.logout().catch(() => {});
+      window.location.reload();
+    };
+  }
+}
 
 // ─── Particle Background ──────────────────────────────────────────────────
 

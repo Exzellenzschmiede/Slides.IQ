@@ -130,5 +130,25 @@ export const api = {
   settings: {
     get: () => apiFetch('/settings'),
     update: (data) => apiFetch('/settings', { method: 'PUT', body: data })
+  },
+
+  auth: {
+    setupNeeded: () => apiFetch('/auth/setup-needed'),
+    setup: (data) => apiFetch('/auth/setup', { method: 'POST', body: data }),
+    login: (data) => apiFetch('/auth/login', { method: 'POST', body: data }),
+    logout: () => apiFetch('/auth/logout', { method: 'POST' }),
+    me: () => apiFetch('/auth/me'),
+    users: {
+      list: () => apiFetch('/auth/users'),
+      create: (data) => apiFetch('/auth/users', { method: 'POST', body: data }),
+      delete: (id) => apiFetch(`/auth/users/${id}`, { method: 'DELETE' }),
+      resetPassword: (id, password) => apiFetch(`/auth/users/${id}/password`, { method: 'PUT', body: { password } }),
+    }
+  },
+
+  shares: {
+    list: (presentationId) => apiFetch(`/presentations/${presentationId}/user-shares`),
+    set: (presentationId, userId, permission) => apiFetch(`/presentations/${presentationId}/user-shares/${userId}`, { method: 'PUT', body: { permission } }),
+    remove: (presentationId, userId) => apiFetch(`/presentations/${presentationId}/user-shares/${userId}`, { method: 'DELETE' }),
   }
 };
