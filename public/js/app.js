@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initModal();
   initParticles();
   checkApiStatus();
+  initSidebarToggle();
 
   const container = document.getElementById('view-container');
   initRouter(container);
@@ -101,6 +102,23 @@ function initParticles() {
   }
 
   draw();
+}
+
+// ─── Sidebar Toggle ───────────────────────────────────────────────────────
+
+function initSidebarToggle() {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  if (!sidebar || !btn) return;
+
+  if (localStorage.getItem('sidebarCollapsed') === '1') {
+    sidebar.classList.add('collapsed');
+  }
+
+  btn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+  });
 }
 
 // ─── API Status Check ─────────────────────────────────────────────────────
