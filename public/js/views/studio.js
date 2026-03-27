@@ -60,17 +60,34 @@ function buildStudioHTML(p) {
       <h1 class="view-title" style="font-size:18px" id="studio-title">${escHtml(p.title)}</h1>
       <p class="view-subtitle" id="studio-meta">${p.slide_count || 0} Slides · zuletzt ${formatDate(p.updated_at)}</p>
     </div>
-    <div class="flex gap-8" style="margin-left:auto;flex-wrap:wrap">
+    <div class="flex gap-8" style="margin-left:auto">
       ${p.html_content ? `
-        <button class="btn btn-ghost btn-sm" id="btn-present">▶ Präsentieren</button>
-        <button class="btn btn-ghost btn-sm" id="btn-presenter-mode">⊞ Presenter</button>
-        <button class="btn btn-ghost btn-sm" id="btn-edit-slides">✏ Bearbeiten</button>
-        <button class="btn btn-ghost btn-sm" id="btn-analyze">◎ Analyse</button>
+      <div class="studio-dropdown">
+        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">▶ Präsentieren ▾</button>
+        <div class="studio-dropdown-menu">
+          <button class="studio-dropdown-item" id="btn-present">▶ Präsentieren</button>
+          <button class="studio-dropdown-item" id="btn-presenter-mode">⊞ Presenter</button>
+        </div>
+      </div>
       ` : ''}
-      <button class="btn btn-ghost btn-sm" id="btn-versions">⏱ Versionen</button>
-      <button class="btn btn-ghost btn-sm" id="btn-share">🔗 Teilen</button>
-      <button class="btn btn-ghost btn-sm" id="btn-export-html">↓ HTML</button>
-      ${p.html_content ? `<button class="btn btn-ghost btn-sm" id="btn-export-pdf">↓ PDF</button>` : ''}
+      <div class="studio-dropdown">
+        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">✏ Bearbeiten ▾</button>
+        <div class="studio-dropdown-menu">
+          ${p.html_content ? `
+          <button class="studio-dropdown-item" id="btn-edit-slides">✏ Bearbeiten</button>
+          <button class="studio-dropdown-item" id="btn-analyze">◎ Analyse</button>
+          ` : ''}
+          <button class="studio-dropdown-item" id="btn-versions">⏱ Versionen</button>
+        </div>
+      </div>
+      <div class="studio-dropdown">
+        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">🔗 Teilen ▾</button>
+        <div class="studio-dropdown-menu">
+          <button class="studio-dropdown-item" id="btn-share">🔗 Teilen</button>
+          <button class="studio-dropdown-item" id="btn-export-html">↓ HTML</button>
+          ${p.html_content ? `<button class="studio-dropdown-item" id="btn-export-pdf">↓ PDF</button>` : ''}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -663,6 +680,20 @@ async function sendMessage() {
 // ─── Event binding ────────────────────────────────────────────────────────
 
 function bindEvents() {
+  // Dropdown menus
+  document.querySelectorAll('.studio-dropdown-trigger').forEach(trigger => {
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dropdown = trigger.closest('.studio-dropdown');
+      const isOpen = dropdown.classList.contains('open');
+      document.querySelectorAll('.studio-dropdown.open').forEach(d => d.classList.remove('open'));
+      if (!isOpen) dropdown.classList.add('open');
+    });
+  });
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.studio-dropdown.open').forEach(d => d.classList.remove('open'));
+  }, { capture: true });
+
   const chatInput = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
 

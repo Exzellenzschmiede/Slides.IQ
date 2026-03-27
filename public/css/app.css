@@ -446,6 +446,44 @@ html, body {
   height: calc(100vh - 64px);
 }
 
+/* ── Studio Dropdowns ── */
+.studio-dropdown {
+  position: relative;
+}
+.studio-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.studio-dropdown.open .studio-dropdown-menu { display: block; }
+.studio-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.studio-dropdown-item:hover {
+  color: var(--text);
+  background: var(--bg-card-hover);
+}
+
 .studio-sidebar {
   display: flex; flex-direction: column;
   gap: 16px; overflow-y: auto;
