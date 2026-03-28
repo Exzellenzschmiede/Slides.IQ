@@ -72,13 +72,12 @@ function buildStudioHTML(p) {
         </div>
       </div>
       ` : ''}
+      ${p.html_content ? `
       <div class="studio-dropdown">
         <button class="btn btn-ghost btn-sm studio-dropdown-trigger">✏ Bearbeiten ▾</button>
         <div class="studio-dropdown-menu">
-          ${p.html_content ? `
           <button class="studio-dropdown-item" id="btn-edit-slides">✏ Bearbeiten</button>
           <button class="studio-dropdown-item" id="btn-analyze">◎ Analyse</button>
-          ` : ''}
           <button class="studio-dropdown-item" id="btn-versions">⏱ Versionen</button>
         </div>
       </div>
@@ -87,9 +86,10 @@ function buildStudioHTML(p) {
         <div class="studio-dropdown-menu">
           <button class="studio-dropdown-item" id="btn-share">🔗 Teilen</button>
           <button class="studio-dropdown-item" id="btn-export-html">↓ HTML</button>
-          ${p.html_content ? `<button class="studio-dropdown-item" id="btn-export-pdf">↓ PDF</button>` : ''}
+          <button class="studio-dropdown-item" id="btn-export-pdf">↓ PDF</button>
         </div>
       </div>
+      ` : ''}
     </div>
   </div>
 
