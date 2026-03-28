@@ -277,13 +277,12 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     pres.style.transform = 'translate(' + offsetX + 'px, ' + offsetY + 'px) scale(' + scale + ')';
   }
   scalePresentation();
-  // ResizeObserver is the most reliable trigger — fires after dimensions settle,
-  // including fullscreen transitions where 'resize' / 'fullscreenchange' may fire early
-  if (window.ResizeObserver) {
-    new ResizeObserver(scalePresentation).observe(document.documentElement);
-  } else {
-    window.addEventListener('resize', scalePresentation);
-  }
+  window.addEventListener('resize', scalePresentation);
+  document.addEventListener('fullscreenchange', function () {
+    // fullscreenchange fires before the browser updates window.innerWidth/Height,
+    // so we defer until the new dimensions are stable
+    setTimeout(scalePresentation, 50);
+  });
 
   // Init
   goto(0);
