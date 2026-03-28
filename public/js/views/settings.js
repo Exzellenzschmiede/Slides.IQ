@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { toastError } from '../components/toast.js';
 import { initPasswordToggles } from '../utils/passwordToggle.js';
 import { t, setLanguage } from '../i18n.js';
+import { rerenderCurrentView } from '../router.js';
 
 function escHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -266,9 +267,12 @@ export async function renderSettings(container) {
     });
   });
 
-  // Language: apply immediately on change (nav labels etc.)
-  document.getElementById('pref-lang')?.addEventListener('change', () => {
+  // Language: save immediately + re-render so the view itself switches language
+  document.getElementById('pref-lang')?.addEventListener('change', async () => {
+    clearTimeout(saveTimer);
     setLanguage(document.getElementById('pref-lang').value);
+    await saveAll();
+    rerenderCurrentView();
   });
 
   // ─── Password change (manual) ─────────────────────────────────────────────
