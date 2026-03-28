@@ -114,32 +114,6 @@ export async function renderSettings(container) {
         </div>
       </div>
 
-      <!-- Preferences -->
-      <div class="settings-section">
-        <div class="settings-section-title">${t('settings.prefsSection')}</div>
-      </div>
-
-      <div class="card" style="grid-column:span 2">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="form-group">
-            <label class="form-label">${t('settings.slideCountLabel')}</label>
-            <select class="form-select" id="pref-slides">
-              ${[6,8,10,12,15,20].map(n => `<option value="${n}" ${(prefs.defaultSlideCount || 10) === n ? 'selected' : ''}>${n} ${t('common.slides')}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">${t('settings.languageLabel')}</label>
-            <select class="form-select" id="pref-lang">
-              <option value="en" ${(prefs.language || 'en') === 'en' ? 'selected' : ''}>${t('settings.langEn')}</option>
-              <option value="de" ${(prefs.language || 'en') === 'de' ? 'selected' : ''}>${t('settings.langDe')}</option>
-              <option value="it" ${(prefs.language || 'en') === 'it' ? 'selected' : ''}>${t('settings.langIt')}</option>
-              <option value="nl" ${(prefs.language || 'en') === 'nl' ? 'selected' : ''}>${t('settings.langNl')}</option>
-              <option value="pl" ${(prefs.language || 'en') === 'pl' ? 'selected' : ''}>${t('settings.langPl')}</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
       <!-- My Account -->
       <div class="settings-section">
         <div class="settings-section-title">${t('settings.accountSection')}</div>
@@ -153,6 +127,16 @@ export async function renderSettings(container) {
         <div class="form-group">
           <label class="form-label">${t('settings.emailLabel')}</label>
           <input type="email" class="form-input" id="profile-email" value="${escHtml(window.__currentUser?.email || '')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">${t('settings.languageLabel')}</label>
+          <select class="form-select" id="pref-lang">
+            <option value="en" ${(prefs.language || 'en') === 'en' ? 'selected' : ''}>${t('settings.langEn')}</option>
+            <option value="de" ${(prefs.language || 'en') === 'de' ? 'selected' : ''}>${t('settings.langDe')}</option>
+            <option value="it" ${(prefs.language || 'en') === 'it' ? 'selected' : ''}>${t('settings.langIt')}</option>
+            <option value="nl" ${(prefs.language || 'en') === 'nl' ? 'selected' : ''}>${t('settings.langNl')}</option>
+            <option value="pl" ${(prefs.language || 'en') === 'pl' ? 'selected' : ''}>${t('settings.langPl')}</option>
+          </select>
         </div>
         <div id="profile-error" style="color:var(--danger);font-size:13px;display:none"></div>
         <button class="btn btn-primary btn-sm" id="save-profile-btn">${t('settings.saveProfileBtn')}</button>
@@ -281,7 +265,6 @@ export async function renderSettings(container) {
         tone: document.getElementById('brand-tone').value
       },
       preferences: {
-        defaultSlideCount: parseInt(document.getElementById('pref-slides').value),
         language: newLang,
         mainModel: document.getElementById('pref-model').value
       }
