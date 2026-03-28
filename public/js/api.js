@@ -85,6 +85,7 @@ export const api = {
     create: (data) => apiFetch('/templates', { method: 'POST', body: data }),
     update: (id, data) => apiFetch(`/templates/${id}`, { method: 'PUT', body: data }),
     delete: (id) => apiFetch(`/templates/${id}`, { method: 'DELETE' }),
+    share: (id, isPublic) => apiFetch(`/templates/${id}/share`, { method: 'PUT', body: { isPublic } }),
     analyzeFromPptx: async (file) => {
       const form = new FormData();
       form.append('file', file);
