@@ -3,6 +3,7 @@
 import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
 import { initPasswordToggles } from '../utils/passwordToggle.js';
+import { t, setLanguage } from '../i18n.js';
 
 function escHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -18,55 +19,55 @@ export async function renderSettings(container) {
   container.innerHTML = `
     <div class="view-header">
       <div>
-        <h1 class="view-title">Einstellungen</h1>
-        <p class="view-subtitle">Slides.IQ konfigurieren und Brand Identity festlegen</p>
+        <h1 class="view-title">${t('settings.title')}</h1>
+        <p class="view-subtitle">${t('settings.subtitle')}</p>
       </div>
-      <button class="btn btn-primary" id="save-settings-btn">Speichern</button>
+      <button class="btn btn-primary" id="save-settings-btn">${t('settings.saveBtn')}</button>
     </div>
 
     <div class="settings-grid">
 
       <!-- API -->
       <div class="settings-section">
-        <div class="settings-section-title">Claude API</div>
+        <div class="settings-section-title">${t('settings.apiSection')}</div>
       </div>
       <div class="card" style="grid-column:span 2">
         <div class="form-group">
-          <label class="form-label">API Key Status</label>
-          <div id="api-key-status" class="text-sm text-muted">Wird geprüft…</div>
+          <label class="form-label">${t('settings.apiKeyStatus')}</label>
+          <div id="api-key-status" class="text-sm text-muted">${t('settings.apiKeyChecking')}</div>
         </div>
         <div class="form-group" style="margin-top:16px">
-          <label class="form-label">Generierungsmodell</label>
+          <label class="form-label">${t('settings.modelLabel')}</label>
           <select class="form-select" id="pref-model">
             ${[
-              ['claude-opus-4-6',          'Opus 4.6 — Stärkstes Modell'],
-              ['claude-sonnet-4-6',        'Sonnet 4.6 — Ausgewogen'],
-              ['claude-haiku-4-5-20251001','Haiku 4.5 — Schnellstes Modell'],
+              ['claude-opus-4-6',          t('settings.modelOpus')],
+              ['claude-sonnet-4-6',        t('settings.modelSonnet')],
+              ['claude-haiku-4-5-20251001', t('settings.modelHaiku')],
             ].map(([v, l]) => `<option value="${v}" ${(prefs.mainModel || 'claude-sonnet-4-6') === v ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
-          <div class="text-xs text-muted" style="margin-top:6px">Gilt für die Präsentationsgenerierung. Analyse-Funktionen nutzen immer Haiku.</div>
+          <div class="text-xs text-muted" style="margin-top:6px">${t('settings.modelNote')}</div>
         </div>
       </div>
 
       <!-- Brand Identity -->
       <div class="settings-section">
-        <div class="settings-section-title">Brand Identity (Design DNA)</div>
+        <div class="settings-section-title">${t('settings.brandSection')}</div>
       </div>
 
       <div class="card">
         <div class="form-group">
-          <label class="form-label">Firmen-/Projektname</label>
-          <input type="text" class="form-input" id="brand-name" value="${brand.name || ''}" placeholder="Slides.IQ">
+          <label class="form-label">${t('settings.brandNameLabel')}</label>
+          <input type="text" class="form-input" id="brand-name" value="${brand.name || ''}" placeholder="${t('settings.brandNamePlaceholder')}">
         </div>
         <div class="form-group">
-          <label class="form-label">Primärfarbe</label>
+          <label class="form-label">${t('settings.primaryColorLabel')}</label>
           <div class="flex items-center gap-8">
             <input type="color" class="form-input" id="brand-primary" value="${brand.primaryColor || '#7c3aed'}" style="width:60px;height:42px;cursor:pointer">
             <input type="text" class="form-input" id="brand-primary-text" value="${brand.primaryColor || '#7c3aed'}" style="font-family:var(--font-mono);width:120px">
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Akzentfarbe</label>
+          <label class="form-label">${t('settings.accentColorLabel')}</label>
           <div class="flex items-center gap-8">
             <input type="color" class="form-input" id="brand-accent" value="${brand.accentColor || '#06b6d4'}" style="width:60px;height:42px;cursor:pointer">
             <input type="text" class="form-input" id="brand-accent-text" value="${brand.accentColor || '#06b6d4'}" style="font-family:var(--font-mono);width:120px">
@@ -76,7 +77,7 @@ export async function renderSettings(container) {
 
       <div class="card">
         <div class="form-group">
-          <label class="form-label">Schriftart</label>
+          <label class="form-label">${t('settings.fontLabel')}</label>
           <select class="form-select" id="brand-font">
             ${['Inter', 'Georgia', 'JetBrains Mono', 'Times New Roman', 'Arial', 'Helvetica'].map(f =>
               `<option value="${f}" ${(brand.font || 'Inter') === f ? 'selected' : ''}>${f}</option>`
@@ -84,30 +85,30 @@ export async function renderSettings(container) {
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Design-Stil</label>
+          <label class="form-label">${t('settings.styleLabel')}</label>
           <select class="form-select" id="brand-style">
             ${[
-              ['modern', 'Modern & Clean'],
-              ['corporate', 'Corporate & Professional'],
-              ['creative', 'Kreativ & Verspielt'],
-              ['minimal', 'Minimalistisch'],
-              ['tech', 'Tech & Digital']
+              ['modern',    t('settings.styleModern')],
+              ['corporate', t('settings.styleCorporate')],
+              ['creative',  t('settings.styleCreative')],
+              ['minimal',   t('settings.styleMinimal')],
+              ['tech',      t('settings.styleTech')]
             ].map(([v, l]) => `<option value="${v}" ${(brand.style || 'modern') === v ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Brand Tagline (optional)</label>
-          <input type="text" class="form-input" id="brand-tagline" value="${brand.tagline || ''}" placeholder="Innovation neu gedacht">
+          <label class="form-label">${t('settings.taglineLabel')}</label>
+          <input type="text" class="form-input" id="brand-tagline" value="${brand.tagline || ''}" placeholder="${t('settings.taglinePlaceholder')}">
         </div>
         <div class="form-group">
-          <label class="form-label">Ton/Stimme</label>
+          <label class="form-label">${t('settings.toneLabel')}</label>
           <select class="form-select" id="brand-tone">
             ${[
-              ['professional', 'Professionell & Sachlich'],
-              ['inspiring', 'Inspirierend & Motivierend'],
-              ['casual', 'Locker & Freundlich'],
-              ['bold', 'Mutig & Direkt'],
-              ['academic', 'Akademisch & Präzise']
+              ['professional', t('settings.toneProfessional')],
+              ['inspiring',    t('settings.toneInspiring')],
+              ['casual',       t('settings.toneCasual')],
+              ['bold',         t('settings.toneBold')],
+              ['academic',     t('settings.toneAcademic')]
             ].map(([v, l]) => `<option value="${v}" ${(brand.tone || 'professional') === v ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
         </div>
@@ -115,77 +116,78 @@ export async function renderSettings(container) {
 
       <!-- Preferences -->
       <div class="settings-section">
-        <div class="settings-section-title">Präferenzen</div>
+        <div class="settings-section-title">${t('settings.prefsSection')}</div>
       </div>
 
       <div class="card" style="grid-column:span 2">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <div class="form-group">
-            <label class="form-label">Standard Slide-Anzahl</label>
+            <label class="form-label">${t('settings.slideCountLabel')}</label>
             <select class="form-select" id="pref-slides">
-              ${[6,8,10,12,15,20].map(n => `<option value="${n}" ${(prefs.defaultSlideCount || 10) === n ? 'selected' : ''}>${n} Slides</option>`).join('')}
+              ${[6,8,10,12,15,20].map(n => `<option value="${n}" ${(prefs.defaultSlideCount || 10) === n ? 'selected' : ''}>${n} ${t('common.slides')}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Standard Sprache</label>
+            <label class="form-label">${t('settings.languageLabel')}</label>
             <select class="form-select" id="pref-lang">
-              <option value="de" ${(prefs.language || 'de') === 'de' ? 'selected' : ''}>Deutsch</option>
-              <option value="en" ${(prefs.language || 'de') === 'en' ? 'selected' : ''}>English</option>
-              <option value="fr" ${(prefs.language || 'de') === 'fr' ? 'selected' : ''}>Français</option>
-              <option value="es" ${(prefs.language || 'de') === 'es' ? 'selected' : ''}>Español</option>
+              <option value="en" ${(prefs.language || 'en') === 'en' ? 'selected' : ''}>${t('settings.langEn')}</option>
+              <option value="de" ${(prefs.language || 'en') === 'de' ? 'selected' : ''}>${t('settings.langDe')}</option>
+              <option value="it" ${(prefs.language || 'en') === 'it' ? 'selected' : ''}>${t('settings.langIt')}</option>
+              <option value="nl" ${(prefs.language || 'en') === 'nl' ? 'selected' : ''}>${t('settings.langNl')}</option>
+              <option value="pl" ${(prefs.language || 'en') === 'pl' ? 'selected' : ''}>${t('settings.langPl')}</option>
             </select>
           </div>
         </div>
       </div>
 
-      <!-- Mein Konto -->
+      <!-- My Account -->
       <div class="settings-section">
-        <div class="settings-section-title">Mein Konto</div>
+        <div class="settings-section-title">${t('settings.accountSection')}</div>
       </div>
 
       <div class="card">
         <div class="form-group">
-          <label class="form-label">Name</label>
+          <label class="form-label">${t('settings.nameLabel')}</label>
           <input type="text" class="form-input" id="profile-name" value="${escHtml(window.__currentUser?.name || '')}">
         </div>
         <div class="form-group">
-          <label class="form-label">E-Mail</label>
+          <label class="form-label">${t('settings.emailLabel')}</label>
           <input type="email" class="form-input" id="profile-email" value="${escHtml(window.__currentUser?.email || '')}">
         </div>
         <div id="profile-error" style="color:var(--danger);font-size:13px;display:none"></div>
-        <button class="btn btn-primary btn-sm" id="save-profile-btn">Profil speichern</button>
+        <button class="btn btn-primary btn-sm" id="save-profile-btn">${t('settings.saveProfileBtn')}</button>
       </div>
 
       <div class="card">
         <div class="form-group">
-          <label class="form-label">Aktuelles Passwort</label>
+          <label class="form-label">${t('settings.currentPwLabel')}</label>
           <div class="password-wrapper">
             <input type="password" class="form-input" id="pw-current" placeholder="••••••••" autocomplete="current-password">
-            <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+            <button type="button" class="password-toggle" title="${t('settings.currentPwLabel')}">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Neues Passwort (mind. 8 Zeichen)</label>
+          <label class="form-label">${t('settings.newPwLabel')}</label>
           <div class="password-wrapper">
             <input type="password" class="form-input" id="pw-new" placeholder="••••••••" autocomplete="new-password">
-            <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+            <button type="button" class="password-toggle" title="${t('settings.newPwLabel')}">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Neues Passwort bestätigen</label>
+          <label class="form-label">${t('settings.confirmPwLabel')}</label>
           <div class="password-wrapper">
             <input type="password" class="form-input" id="pw-confirm" placeholder="••••••••" autocomplete="new-password">
-            <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+            <button type="button" class="password-toggle" title="${t('settings.confirmPwLabel')}">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
         </div>
         <div id="pw-error" style="color:var(--danger);font-size:13px;display:none"></div>
-        <button class="btn btn-primary btn-sm" id="change-pw-btn">Passwort ändern</button>
+        <button class="btn btn-primary btn-sm" id="change-pw-btn">${t('settings.changePwBtn')}</button>
       </div>
 
     </div>
@@ -205,7 +207,7 @@ export async function renderSettings(container) {
       window.__currentUser = { ...window.__currentUser, name: result.name, email: result.email };
       const nameEl = document.getElementById('sidebar-user-name');
       if (nameEl) nameEl.textContent = result.name;
-      toastSuccess('Profil gespeichert');
+      toastSuccess(t('settings.profileSaved'));
     } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
@@ -219,7 +221,7 @@ export async function renderSettings(container) {
     const newPw = document.getElementById('pw-new').value;
     const confirmPw = document.getElementById('pw-confirm').value;
     if (newPw !== confirmPw) {
-      errEl.textContent = 'Die neuen Passwörter stimmen nicht überein';
+      errEl.textContent = t('settings.pwMismatch');
       errEl.style.display = '';
       return;
     }
@@ -231,7 +233,7 @@ export async function renderSettings(container) {
       document.getElementById('pw-current').value = '';
       document.getElementById('pw-new').value = '';
       document.getElementById('pw-confirm').value = '';
-      toastSuccess('Passwort geändert');
+      toastSuccess(t('settings.pwChanged'));
     } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
@@ -254,18 +256,20 @@ export async function renderSettings(container) {
     if (!el) return;
     const dot = document.querySelector('.status-dot');
     if (status.hasApiKey) {
-      el.innerHTML = `<span style="color:var(--success)">✓ API Key gefunden</span> · Model: <code class="font-mono">${status.model}</code>`;
+      el.innerHTML = `<span style="color:var(--success)">${t('settings.apiKeyFound')}</span> · Model: <code class="font-mono">${status.model}</code>`;
       dot?.classList.add('online');
     } else {
-      el.innerHTML = `<span style="color:var(--danger)">✕ Kein API Key gesetzt</span> — Setze ANTHROPIC_API_KEY in der .env Datei`;
+      el.innerHTML = `<span style="color:var(--danger)">${t('settings.apiKeyMissing')}</span>`;
       dot?.classList.add('error');
     }
   }).catch(() => {
-    document.getElementById('api-key-status').textContent = 'Status nicht verfügbar';
+    const el = document.getElementById('api-key-status');
+    if (el) el.textContent = t('settings.apiKeyUnavailable');
   });
 
   // Save
   document.getElementById('save-settings-btn').addEventListener('click', async () => {
+    const newLang = document.getElementById('pref-lang').value;
     const data = {
       brand: {
         name: document.getElementById('brand-name').value,
@@ -278,17 +282,17 @@ export async function renderSettings(container) {
       },
       preferences: {
         defaultSlideCount: parseInt(document.getElementById('pref-slides').value),
-        language: document.getElementById('pref-lang').value,
+        language: newLang,
         mainModel: document.getElementById('pref-model').value
       }
     };
 
     try {
       await api.settings.update(data);
-      toastSuccess('Einstellungen gespeichert!');
+      setLanguage(newLang);
+      toastSuccess(t('settings.settingsSaved'));
     } catch (err) {
-      toastError('Fehler: ' + err.message);
+      toastError(t('settings.settingsError', { msg: err.message }));
     }
   });
 }
-

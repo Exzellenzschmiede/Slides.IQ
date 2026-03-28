@@ -9,6 +9,7 @@ import { renderSettings } from './views/settings.js';
 import { renderAdmin } from './views/admin.js';
 import { api } from './api.js';
 import { initPasswordToggles } from './utils/passwordToggle.js';
+import { setLanguage, getCurrentLocale } from './i18n.js';
 
 // ─── Register views ───────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ async function initAuth() {
   // Check if already logged in
   try {
     const user = await api.auth.me();
-    setCurrentUser(user);
+    await setCurrentUser(user);
     overlay.classList.add('hidden');
     checkApiStatus();
     return;
@@ -89,18 +90,18 @@ function waitForLogin() {
     async function tryLogin() {
       errEl.style.display = 'none';
       btn.disabled = true;
-      btn.textContent = 'Anmelden…';
+      btn.textContent = 'Signing in…';
       try {
         const user = await api.auth.login({ email: emailEl.value.trim(), password: passEl.value });
-        setCurrentUser(user);
+        await setCurrentUser(user);
         btn.disabled = false;
-        btn.textContent = 'Anmelden';
+        btn.textContent = 'Sign in';
         resolve();
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = '';
         btn.disabled = false;
-        btn.textContent = 'Anmelden';
+        btn.textContent = 'Sign in';
       }
     }
 
@@ -120,22 +121,22 @@ function waitForSetup() {
     async function trySetup() {
       errEl.style.display = 'none';
       btn.disabled = true;
-      btn.textContent = 'Wird erstellt…';
+      btn.textContent = 'Creating…';
       try {
         const user = await api.auth.setup({
           name: nameEl.value.trim(),
           email: emailEl.value.trim(),
           password: passEl.value
         });
-        setCurrentUser(user);
+        await setCurrentUser(user);
         btn.disabled = false;
-        btn.textContent = 'Admin-Account anlegen';
+        btn.textContent = 'Create admin account';
         resolve();
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = '';
         btn.disabled = false;
-        btn.textContent = 'Admin-Account anlegen';
+        btn.textContent = 'Create admin account';
       }
     }
 
@@ -143,12 +144,21 @@ function waitForSetup() {
   });
 }
 
-function setCurrentUser(user) {
+async function setCurrentUser(user) {
   const nameEl = document.getElementById('sidebar-user-name');
   if (nameEl) nameEl.textContent = user.name || user.email;
 
   // Store role for views
   window.__currentUser = user;
+
+  // Load and apply user's language preference before any view renders
+  try {
+    const settings = await api.settings.get();
+    const lang = settings?.preferences?.language || 'en';
+    setLanguage(lang);
+  } catch {
+    setLanguage('en');
+  }
 
   // Show admin nav item for admins
   if (user.role === 'admin') {
@@ -260,10 +270,10 @@ async function checkApiStatus() {
     const label = document.querySelector('.api-status span');
     if (dot && status.hasApiKey) {
       dot.classList.add('online');
-      if (label) label.textContent = 'Claude bereit';
+      if (label) label.textContent = 'Claude ready';
     } else if (dot) {
       dot.classList.add('error');
-      if (label) label.textContent = 'Kein API Key';
+      if (label) label.textContent = 'No API Key';
     }
   } catch {}
 }

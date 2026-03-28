@@ -5,6 +5,7 @@ import { navigate } from '../router.js';
 import { showModal, closeModal } from '../components/modal.js';
 import { toastSuccess, toastError, toastInfo } from '../components/toast.js';
 import { openSlideEditor } from './slideEditor.js';
+import { t, getCurrentLocale } from '../i18n.js';
 
 let currentPresentation = null;
 let isGenerating = false;
@@ -18,14 +19,9 @@ let slideScopedMode = false;
 let slideScopedIndex = -1;
 let messageListenerActive = false;
 
-const QUICK_PROMPTS = [
-  'Mache die Präsentation visuell beeindruckender',
-  'Füge eine Agenda-Slide am Anfang hinzu',
-  'Verbessere die Typografie und Lesbarkeit',
-  'Füge interaktive Animationen hinzu',
-  'Optimiere für mobile Geräte',
-  'Mache das Closing stärker und einprägsamer'
-];
+function getQuickPrompts() {
+  return t('studio.quickPrompts');
+}
 
 export async function renderStudio(container, { id }) {
   if (!id) { navigate('dashboard'); return; }
@@ -55,38 +51,38 @@ function buildStudioHTML(p) {
 
   return `
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-    <button class="studio-back-btn" onclick="window.history.back()" title="Zurück zu Meine Slides">
+    <button class="studio-back-btn" onclick="window.history.back()" title="${t('studio.backTitle')}">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
     <div>
       <h1 class="view-title" style="font-size:18px" id="studio-title">${escHtml(p.title)}</h1>
-      <p class="view-subtitle" id="studio-meta">${p.slide_count || 0} Slides · zuletzt ${formatDate(p.updated_at)}</p>
+      <p class="view-subtitle" id="studio-meta">${p.slide_count || 0} ${t('common.slides')} · ${t('studio.metaSlides', { count: p.slide_count || 0, date: formatDate(p.updated_at) })}</p>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
       ${p.html_content ? `
       <div class="studio-dropdown">
-        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">▶ Präsentieren ▾</button>
+        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">${t('studio.presentMenu')}</button>
         <div class="studio-dropdown-menu">
-          <button class="studio-dropdown-item" id="btn-present">▶ Präsentieren</button>
-          <button class="studio-dropdown-item" id="btn-presenter-mode">⊞ Presenter</button>
+          <button class="studio-dropdown-item" id="btn-present">${t('studio.presentBtn')}</button>
+          <button class="studio-dropdown-item" id="btn-presenter-mode">${t('studio.presenterBtn')}</button>
         </div>
       </div>
       ` : ''}
       ${p.html_content ? `
       <div class="studio-dropdown">
-        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">✏ Bearbeiten ▾</button>
+        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">${t('studio.editBtn')}</button>
         <div class="studio-dropdown-menu">
-          <button class="studio-dropdown-item" id="btn-edit-slides">✏ Bearbeiten</button>
-          <button class="studio-dropdown-item" id="btn-analyze">◎ Analyse</button>
-          <button class="studio-dropdown-item" id="btn-versions">⏱ Versionen</button>
+          <button class="studio-dropdown-item" id="btn-edit-slides">${t('studio.editSlidesBtn')}</button>
+          <button class="studio-dropdown-item" id="btn-analyze">${t('studio.analyzeBtn')}</button>
+          <button class="studio-dropdown-item" id="btn-versions">${t('studio.versionsBtn')}</button>
         </div>
       </div>
       <div class="studio-dropdown">
-        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">🔗 Teilen ▾</button>
+        <button class="btn btn-ghost btn-sm studio-dropdown-trigger">${t('studio.shareBtn')}</button>
         <div class="studio-dropdown-menu">
-          <button class="studio-dropdown-item" id="btn-share">🔗 Teilen</button>
-          <button class="studio-dropdown-item" id="btn-export-html">↓ HTML</button>
-          <button class="studio-dropdown-item" id="btn-export-pdf">↓ PDF</button>
+          <button class="studio-dropdown-item" id="btn-share">${t('studio.shareSingle')}</button>
+          <button class="studio-dropdown-item" id="btn-export-html">${t('studio.exportHtml')}</button>
+          <button class="studio-dropdown-item" id="btn-export-pdf">${t('studio.exportPdf')}</button>
         </div>
       </div>
       ` : ''}
@@ -100,7 +96,7 @@ function buildStudioHTML(p) {
       <!-- Chat History -->
       <div class="card studio-chat-history">
         <div class="flex items-center justify-between">
-          <span class="form-label" style="margin-bottom:0">✦ AI Studio</span>
+          <span class="form-label" style="margin-bottom:0">${t('studio.aiStudio')}</span>
           <span class="text-xs text-muted" id="studio-model-label">Claude</span>
         </div>
         <div class="chat-messages" id="chat-messages">
@@ -109,7 +105,7 @@ function buildStudioHTML(p) {
         <div id="generating-indicator" style="display:none">
           <div class="generating-indicator">
             <div class="gen-dots"><span></span><span></span><span></span></div>
-            <span id="generating-label">Claude generiert deine Präsentation…</span>
+            <span id="generating-label">${t('studio.generating')}</span>
           </div>
         </div>
       </div>
@@ -119,18 +115,18 @@ function buildStudioHTML(p) {
         <div class="chat-input-area">
           <!-- Slide mode banner -->
           <div class="slide-mode-banner" id="slide-mode-banner" style="display:none">
-            <span class="slide-mode-label" id="slide-mode-label">Slide 1 bearbeiten</span>
-            <button class="btn btn-ghost btn-sm" id="slide-mode-off" style="font-size:10px;padding:2px 6px">✕ Ganzes Deck</button>
+            <span class="slide-mode-label" id="slide-mode-label">${t('studio.slideModeLabel', { index: 1 })}</span>
+            <button class="btn btn-ghost btn-sm" id="slide-mode-off" style="font-size:10px;padding:2px 6px">${t('studio.slideModeOff')}</button>
           </div>
           <div id="attachment-chips" class="attachment-chips"></div>
           <div class="chat-input-wrapper">
-            <button class="attach-btn" id="attach-btn" title="Datei anhängen (PDF, Word, Excel, PowerPoint, Bilder…)">📎</button>
+            <button class="attach-btn" id="attach-btn" title="${t('studio.attachBtn')}">📎</button>
             <textarea
               class="chat-input" id="chat-input"
-              placeholder="Beschreibe deine Präsentation…&#10;Shift+Enter für Zeilenumbruch"
+              placeholder="${t('studio.inputPlaceholder')}"
               rows="3"
             ></textarea>
-            <button class="send-btn" id="send-btn" title="Senden (Enter)">→</button>
+            <button class="send-btn" id="send-btn" title="${t('studio.sendTitle')}">→</button>
           </div>
           <input type="file" id="file-input" multiple
             accept=".pdf,.docx,.xlsx,.xls,.csv,.pptx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp"
@@ -141,7 +137,7 @@ function buildStudioHTML(p) {
       <!-- AI Suggestions (hidden initially) -->
       <div class="card hidden" id="suggestions-panel">
         <div class="flex items-center justify-between mb-8">
-          <span class="form-label" style="margin-bottom:0">◎ KI-Vorschläge</span>
+          <span class="form-label" style="margin-bottom:0">${t('studio.suggestionsTitle')}</span>
           <button class="btn btn-ghost btn-sm" id="close-suggestions">✕</button>
         </div>
         <div id="suggestions-list"></div>
@@ -155,14 +151,14 @@ function buildStudioHTML(p) {
           ? `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>`
           : `<div class="preview-placeholder">
               <div class="preview-placeholder-icon">◈</div>
-              <div class="text-muted" style="font-size:14px">Noch kein Inhalt — starte mit einem Prompt</div>
+              <div class="text-muted" style="font-size:14px">${t('studio.noContentPlaceholder')}</div>
             </div>`
         }
         <!-- Streaming overlay -->
         <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
           <div class="loading-orb"></div>
-          <div class="text-muted text-sm" id="stream-label">Generiere Präsentation…</div>
-          <div id="stream-chars" class="font-mono text-xs text-muted">0 Zeichen</div>
+          <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
+          <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
         </div>
       </div>
 
@@ -202,10 +198,10 @@ async function loadTemplateInfo() {
   if (!tplEl) return;
 
   if (currentPresentation.template_id) {
-    const tpl = templates.find(t => t.id === currentPresentation.template_id);
-    tplEl.textContent = tpl ? tpl.name : 'Benutzerdefiniert';
+    const tpl = templates.find(tpl => tpl.id === currentPresentation.template_id);
+    tplEl.textContent = tpl ? tpl.name : t('studio.customTemplate');
   } else {
-    tplEl.textContent = 'Kein Template (Standard)';
+    tplEl.textContent = t('studio.noTemplateDefault');
   }
 }
 
@@ -228,7 +224,7 @@ function onIframeMessage(e) {
   if (e.data?.type === 'nexus-slide') {
     currentSlideIndex = e.data.index;
     document.getElementById('studio-meta').textContent =
-      `${e.data.total} Slides · Slide ${e.data.index + 1} aktiv`;
+      `${e.data.total} ${t('common.slides')} · ${t('studio.metaActive', { count: e.data.total, index: e.data.index + 1 })}`;
     syncNavigatorToSlide(e.data.index);
   }
   // Presenter panel
@@ -252,19 +248,19 @@ function buildSlideNavigator() {
   let html = '';
 
   // Insert before first slide
-  html += `<button class="insert-tile-btn" data-after="-1" title="Slide am Anfang einfügen">+</button>`;
+  html += `<button class="insert-tile-btn" data-after="-1" title="${t('studio.insertBtnTitleStart')}">+</button>`;
 
   for (let i = 0; i < count; i++) {
     html += `
       <div class="slide-tile${i === currentSlideIndex ? ' active' : ''}" data-index="${i}">
         <span>${i + 1}</span>
         <div class="slide-tile-actions">
-          <button class="tile-action-btn" data-tile-action="edit" data-index="${i}" title="Mit KI bearbeiten">✏</button>
-          <button class="tile-action-btn" data-tile-action="dup" data-index="${i}" title="Duplizieren">⧉</button>
-          <button class="tile-action-btn danger" data-tile-action="del" data-index="${i}" title="Löschen">🗑</button>
+          <button class="tile-action-btn" data-tile-action="edit" data-index="${i}" title="${t('studio.slideEditTitle', { index: i + 1 })}">✏</button>
+          <button class="tile-action-btn" data-tile-action="dup" data-index="${i}" title="${t('studio.dupTitle')}">⧉</button>
+          <button class="tile-action-btn danger" data-tile-action="del" data-index="${i}" title="${t('studio.delTitle')}">🗑</button>
         </div>
       </div>
-      <button class="insert-tile-btn" data-after="${i}" title="Slide danach einfügen">+</button>
+      <button class="insert-tile-btn" data-after="${i}" title="${t('studio.insertBtnTitle')}">+</button>
     `;
   }
 
@@ -334,9 +330,9 @@ function activateSlideScopedMode(index) {
   const input = document.getElementById('chat-input');
 
   if (banner) banner.style.display = 'flex';
-  if (label) label.textContent = `Slide ${index + 1} bearbeiten`;
+  if (label) label.textContent = t('studio.slideModeLabel', { index: index + 1 });
   if (input) {
-    input.placeholder = `Slide ${index + 1} mit KI bearbeiten…\nShift+Enter für Zeilenumbruch`;
+    input.placeholder = t('studio.slideScopedPlaceholder', { index: index + 1 });
     input.focus();
   }
 
@@ -352,7 +348,7 @@ function deactivateSlideScopedMode() {
   const input = document.getElementById('chat-input');
 
   if (banner) banner.style.display = 'none';
-  if (input) input.placeholder = 'Beschreibe deine Präsentation…\nShift+Enter für Zeilenumbruch';
+  if (input) input.placeholder = t('studio.inputPlaceholder');
 }
 
 async function duplicateSlide(index) {
@@ -361,23 +357,23 @@ async function duplicateSlide(index) {
     const result = await api.presentations.duplicateSlide(currentPresentation.id, index);
     currentPresentation.slide_count = result.slide_count;
     await refreshAfterSlideOp(result.slide_count, result.new_index ?? index + 1);
-    toastSuccess(`Slide ${index + 1} dupliziert`);
+    toastSuccess(t('studio.slideDuplicated', { index: index + 1 }));
   } catch (err) {
-    toastError('Fehler: ' + err.message);
+    toastError(t('common.error') + ': ' + err.message);
   }
 }
 
 async function deleteSlide(index) {
   if (isGenerating) return;
-  if (!confirm(`Slide ${index + 1} wirklich löschen?`)) return;
+  if (!confirm(t('studio.confirmDeleteSlide', { index: index + 1 }))) return;
   try {
     const result = await api.presentations.deleteSlide(currentPresentation.id, index);
     currentPresentation.slide_count = result.slide_count;
     const newIndex = Math.min(index, result.slide_count - 1);
     await refreshAfterSlideOp(result.slide_count, newIndex);
-    toastSuccess(`Slide ${index + 1} gelöscht`);
+    toastSuccess(t('studio.slideDeleted', { index: index + 1 }));
   } catch (err) {
-    toastError('Fehler: ' + err.message);
+    toastError(t('common.error') + ': ' + err.message);
   }
 }
 
@@ -392,8 +388,8 @@ async function refreshAfterSlideOp(slideCount, gotoIndex = 0) {
     container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
       <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
         <div class="loading-orb"></div>
-        <div class="text-muted text-sm" id="stream-label">Generiere…</div>
-        <div id="stream-chars" class="font-mono text-xs text-muted">0 Zeichen</div>
+        <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
+        <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
       </div>`;
     loadPreview();
   }
@@ -404,23 +400,25 @@ async function refreshAfterSlideOp(slideCount, gotoIndex = 0) {
   setTimeout(() => gotoIframeSlide(gotoIndex), 600);
 
   document.getElementById('studio-meta').textContent =
-    `${slideCount} Slides · gerade bearbeitet`;
+    `${slideCount} ${t('common.slides')} · ${t('studio.metaJustEdited', { count: slideCount })}`;
 }
 
 function showInsertSlideModal(afterIndex) {
-  const posLabel = afterIndex < 0 ? 'am Anfang' : `nach Slide ${afterIndex + 1}`;
-  showModal(`Neue Slide einfügen (${posLabel})`, `
+  const posLabel = afterIndex < 0
+    ? t('studio.insertAtStart')
+    : t('studio.insertAfter', { index: afterIndex + 1 });
+  showModal(t('studio.insertSlideTitle', { pos: posLabel }), `
     <div class="form-group">
-      <label class="form-label">Was soll diese Slide zeigen?</label>
+      <label class="form-label">${t('studio.insertPromptLabel')}</label>
       <textarea class="form-input" id="insert-slide-prompt" rows="3"
-        placeholder="z.B. Eine Folie über unsere Kernzielgruppe mit 3 Personas"
+        placeholder="${t('studio.insertPromptPlaceholder')}"
         style="resize:vertical;width:100%"></textarea>
     </div>
     <div class="flex gap-8" style="justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-ghost" id="insert-slide-cancel">Abbrechen</button>
-      <button class="btn btn-primary" id="insert-slide-confirm">Generieren</button>
+      <button class="btn btn-ghost" id="insert-slide-cancel">${t('common.cancel')}</button>
+      <button class="btn btn-primary" id="insert-slide-confirm">${t('studio.insertConfirm')}</button>
     </div>
-  `, `Slide wird im Stil der Präsentation generiert`);
+  `, t('studio.insertStyle'));
 
   setTimeout(() => document.getElementById('insert-slide-prompt')?.focus(), 50);
 
@@ -446,8 +444,8 @@ async function streamEditSlide(slideIndex, prompt) {
   if (isGenerating) return;
   isGenerating = true;
 
-  setGeneratingUI(true, `Slide ${slideIndex + 1} wird bearbeitet…`);
-  showStreamOverlay(`Slide ${slideIndex + 1} bearbeiten…`);
+  setGeneratingUI(true, t('studio.generatingSlide', { index: slideIndex + 1 }));
+  showStreamOverlay(t('studio.generatingSlide', { index: slideIndex + 1 }));
 
   addChatMessage('user', `[Slide ${slideIndex + 1}] ${prompt}`);
 
@@ -457,7 +455,7 @@ async function streamEditSlide(slideIndex, prompt) {
       if (event.type === 'chunk') {
         charCount += event.text.length;
         const charEl = document.getElementById('stream-chars');
-        if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
+        if (charEl) charEl.textContent = t('studio.streamChars', { count: charCount.toLocaleString(getCurrentLocale()) });
       } else if (event.type === 'done') {
         currentPresentation.slide_count = event.slide_count;
       } else if (event.type === 'error') {
@@ -466,10 +464,10 @@ async function streamEditSlide(slideIndex, prompt) {
     }
 
     await refreshAfterSlideOp(currentPresentation.slide_count, slideIndex);
-    addChatMessage('assistant', `✓ Slide ${slideIndex + 1} aktualisiert`);
-    toastSuccess(`Slide ${slideIndex + 1} aktualisiert!`);
+    addChatMessage('assistant', t('studio.assistantSlideUpdated', { index: slideIndex + 1 }));
+    toastSuccess(t('studio.slideUpdated', { index: slideIndex + 1 }));
   } catch (err) {
-    addChatMessage('assistant', '✕ Fehler: ' + err.message);
+    addChatMessage('assistant', t('studio.assistantError', { msg: err.message }));
     toastError(err.message);
   } finally {
     isGenerating = false;
@@ -482,11 +480,13 @@ async function streamInsertSlide(afterIndex, prompt) {
   if (isGenerating) return;
   isGenerating = true;
 
-  const posLabel = afterIndex < 0 ? 'am Anfang' : `nach Slide ${afterIndex + 1}`;
-  setGeneratingUI(true, `Neue Slide wird generiert (${posLabel})…`);
-  showStreamOverlay(`Neue Slide generieren…`);
+  const posLabel = afterIndex < 0
+    ? t('studio.insertAtStart')
+    : t('studio.insertAfter', { index: afterIndex + 1 });
+  setGeneratingUI(true, t('studio.generatingNew', { pos: posLabel }));
+  showStreamOverlay(t('studio.generatingNew', { pos: posLabel }));
 
-  addChatMessage('user', `[Neue Slide ${posLabel}] ${prompt}`);
+  addChatMessage('user', `[${t('common.slides')} ${posLabel}] ${prompt}`);
 
   try {
     let charCount = 0;
@@ -494,19 +494,19 @@ async function streamInsertSlide(afterIndex, prompt) {
       if (event.type === 'chunk') {
         charCount += event.text.length;
         const charEl = document.getElementById('stream-chars');
-        if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
+        if (charEl) charEl.textContent = t('studio.streamChars', { count: charCount.toLocaleString(getCurrentLocale()) });
       } else if (event.type === 'done') {
         currentPresentation.slide_count = event.slide_count;
         const newIndex = event.new_index ?? afterIndex + 1;
         await refreshAfterSlideOp(currentPresentation.slide_count, newIndex);
-        addChatMessage('assistant', `✓ Neue Slide ${newIndex + 1} eingefügt (${currentPresentation.slide_count} Slides gesamt)`);
-        toastSuccess('Neue Slide eingefügt!');
+        addChatMessage('assistant', t('studio.assistantSlideInserted', { index: newIndex + 1, total: currentPresentation.slide_count }));
+        toastSuccess(t('studio.slideInserted'));
       } else if (event.type === 'error') {
         throw new Error(event.message);
       }
     }
   } catch (err) {
-    addChatMessage('assistant', '✕ Fehler: ' + err.message);
+    addChatMessage('assistant', t('studio.assistantError', { msg: err.message }));
     toastError(err.message);
   } finally {
     isGenerating = false;
@@ -517,7 +517,8 @@ async function streamInsertSlide(afterIndex, prompt) {
 
 // ─── UI helpers ───────────────────────────────────────────────────────────
 
-function setGeneratingUI(active, label = 'Claude generiert…') {
+function setGeneratingUI(active, label) {
+  if (!label) label = t('studio.generating');
   const indicator = document.getElementById('generating-indicator');
   const labelEl = document.getElementById('generating-label');
   const input = document.getElementById('chat-input');
@@ -531,13 +532,14 @@ function setGeneratingUI(active, label = 'Claude generiert…') {
   if (quickPrompts) quickPrompts.style.opacity = active ? '0.4' : '1';
 }
 
-function showStreamOverlay(label = 'Generiere…') {
+function showStreamOverlay(label) {
+  if (!label) label = t('studio.streamLabel');
   const overlay = document.getElementById('stream-overlay');
   const labelEl = document.getElementById('stream-label');
   const charEl = document.getElementById('stream-chars');
   if (overlay) overlay.style.display = 'flex';
   if (labelEl) labelEl.textContent = label;
-  if (charEl) charEl.textContent = '0 Zeichen';
+  if (charEl) charEl.textContent = t('studio.zeroChars');
 }
 
 function hideStreamOverlay() {
@@ -565,7 +567,7 @@ async function sendMessage() {
 
   isGenerating = true;
   input.value = '';
-  setGeneratingUI(true, 'Claude generiert deine Präsentation…');
+  setGeneratingUI(true, t('studio.generating'));
 
   // Add user message to chat
   const attachmentLabel = attachments.length
@@ -573,7 +575,7 @@ async function sendMessage() {
     : '';
   addChatMessage('user', prompt + attachmentLabel);
 
-  showStreamOverlay('Generiere Präsentation…');
+  showStreamOverlay(t('studio.streamLabel'));
 
   let charCount = 0;
 
@@ -582,7 +584,7 @@ async function sendMessage() {
       if (event.type === 'chunk') {
         charCount += event.text.length;
         const charEl = document.getElementById('stream-chars');
-        if (charEl) charEl.textContent = charCount.toLocaleString('de') + ' Zeichen';
+        if (charEl) charEl.textContent = t('studio.streamChars', { count: charCount.toLocaleString(getCurrentLocale()) });
       } else if (event.type === 'done') {
         currentPresentation.slide_count = event.slide_count;
       } else if (event.type === 'warning') {
@@ -601,15 +603,15 @@ async function sendMessage() {
       container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
         <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
           <div class="loading-orb"></div>
-          <div class="text-muted text-sm" id="stream-label">Generiere…</div>
-          <div id="stream-chars" class="font-mono text-xs text-muted">0 Zeichen</div>
+          <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
+          <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
         </div>`;
       loadPreview();
 
       // Show suggest button if not present
       const previewActions = document.querySelector('.preview-actions');
       if (previewActions && !document.getElementById('btn-suggest')) {
-        previewActions.innerHTML += `<button class="btn btn-ghost btn-sm" id="btn-suggest">◎ Verbesserungen</button>`;
+        previewActions.innerHTML += `<button class="btn btn-ghost btn-sm" id="btn-suggest">${t('studio.analyzeBtn')}</button>`;
         document.getElementById('btn-suggest')?.addEventListener('click', loadSuggestions);
       }
     }
@@ -627,10 +629,10 @@ async function sendMessage() {
     buildSlideNavigator();
 
     document.getElementById('studio-meta').textContent =
-      `${currentPresentation.slide_count} Slides · gerade aktualisiert`;
+      `${currentPresentation.slide_count} ${t('common.slides')} · ${t('studio.metaJustUpdated', { count: currentPresentation.slide_count })}`;
 
-    addChatMessage('assistant', `✓ Präsentation erstellt mit ${currentPresentation.slide_count} Slides`);
-    toastSuccess('Präsentation generiert!');
+    addChatMessage('assistant', t('studio.assistantCreated', { count: currentPresentation.slide_count }));
+    toastSuccess(t('studio.presentationGenerated'));
 
     // Show present button if not visible
     if (!document.getElementById('btn-present')) {
@@ -638,7 +640,7 @@ async function sendMessage() {
     }
 
   } catch (err) {
-    addChatMessage('assistant', '✕ Fehler: ' + err.message);
+    addChatMessage('assistant', t('studio.assistantError', { msg: err.message }));
     toastError(err.message);
   } finally {
     isGenerating = false;
@@ -718,7 +720,7 @@ function bindEvents() {
       loadPreview();
       buildSlideNavigator();
       document.getElementById('studio-meta').textContent =
-        `${currentPresentation.slide_count} Slides · gerade bearbeitet`;
+        `${currentPresentation.slide_count} ${t('common.slides')} · ${t('studio.metaJustEdited', { count: currentPresentation.slide_count })}`;
     });
   });
 
@@ -733,14 +735,14 @@ function bindEvents() {
 
   document.getElementById('btn-export-pdf')?.addEventListener('click', async () => {
     try {
-      toastInfo('PDF wird erstellt…');
+      toastInfo(t('studio.pdfCreating'));
       const blob = await api.presentations.exportPdf(currentPresentation.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = `${currentPresentation.title}.pdf`; a.click();
-      toastSuccess('PDF exportiert!');
+      toastSuccess(t('studio.pdfExported'));
     } catch (err) {
-      toastError('PDF-Fehler: ' + err.message);
+      toastError(t('studio.pdfError', { msg: err.message }));
     }
   });
 
@@ -762,7 +764,7 @@ async function uploadAttachment(file) {
     updateAttachmentChip(chipId, file.name, false);
   } catch (err) {
     removeAttachmentChip(chipId);
-    toastError(`Upload fehlgeschlagen: ${err.message}`);
+    toastError(t('studio.uploadFailed', { msg: err.message }));
   }
 }
 
@@ -780,7 +782,7 @@ function addAttachmentChip(id, name, loading) {
   chip.innerHTML = `
     <span class="chip-icon">${loading ? '⏳' : icon}</span>
     <span class="chip-name">${escHtml(name)}</span>
-    <button class="chip-remove" data-chip="${id}" title="Entfernen">✕</button>
+    <button class="chip-remove" data-chip="${id}" title="${t('common.remove')}">✕</button>
   `;
   chip.querySelector('.chip-remove').addEventListener('click', () => {
     const idx = pendingAttachments.findIndex(a => a.name === name);
@@ -829,35 +831,35 @@ function refreshStudioHeader() {
 // ─── Analysis / Suggestions ───────────────────────────────────────────────
 
 async function showAnalysis() {
-  showModal('Narrative Arc Analyse', '<div class="loading-screen" style="height:200px"><div class="loading-orb"></div></div>');
+  showModal(t('studio.analysisTitle'), '<div class="loading-screen" style="height:200px"><div class="loading-orb"></div></div>');
   try {
     const analysis = await api.ai.analyze(currentPresentation.id);
     const scoreVal = analysis.score || 0;
     closeModal();
-    showModal('Narrative Arc Analyse', `
+    showModal(t('studio.analysisTitle'), `
       <div class="analysis-score">
         <div class="score-circle" style="--score:${scoreVal}">
           <span>${scoreVal}/10</span>
         </div>
         <div>
           <div style="font-weight:600;margin-bottom:4px">${analysis.summary || ''}</div>
-          <div class="text-sm text-muted">Narrative Flow: ${analysis.narrativeFlow || '—'}</div>
+          <div class="text-sm text-muted">${t('studio.narrativeFlow')}: ${analysis.narrativeFlow || '—'}</div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
-          <div class="form-label">Stärken</div>
+          <div class="form-label">${t('studio.strengths')}</div>
           ${(analysis.strengths || []).map(s => `<div class="text-sm" style="padding:4px 0;border-bottom:1px solid var(--border)">✓ ${s}</div>`).join('') || '<div class="text-muted text-sm">—</div>'}
         </div>
         <div>
-          <div class="form-label">Verbesserungen</div>
+          <div class="form-label">${t('studio.improvements')}</div>
           ${(analysis.improvements || []).map(s => `<div class="text-sm" style="padding:4px 0;border-bottom:1px solid var(--border)">→ ${s}</div>`).join('') || '<div class="text-muted text-sm">—</div>'}
         </div>
       </div>
-    `, 'KI-Analyse deiner Präsentationsstruktur');
+    `, t('studio.analysisSubtitle'));
   } catch (err) {
     closeModal();
-    toastError('Analyse fehlgeschlagen: ' + err.message);
+    toastError(t('studio.analysisFailed', { msg: err.message }));
   }
 }
 
@@ -873,13 +875,13 @@ async function loadSuggestions() {
     const suggestions = await api.ai.suggest(currentPresentation.id);
     list.innerHTML = suggestions.map((s, i) => `
       <div class="card" style="margin-bottom:8px;cursor:pointer" onclick="document.getElementById('chat-input').value = '${escHtml(s.prompt).replace(/'/g, "\\'")}'; document.getElementById('chat-input').focus()">
-        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${s.title || `Vorschlag ${i+1}`}</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${s.title || t('studio.suggestionFallback', { index: i + 1 })}</div>
         <div class="text-sm text-muted">${s.description || ''}</div>
-        <div class="text-xs" style="margin-top:8px;color:var(--primary)">→ Klicken zum Anwenden</div>
+        <div class="text-xs" style="margin-top:8px;color:var(--primary)">${t('studio.suggestClickToApply')}</div>
       </div>
     `).join('');
   } catch (err) {
-    list.innerHTML = `<div class="text-muted text-sm">Fehler: ${err.message}</div>`;
+    list.innerHTML = `<div class="text-muted text-sm">${t('studio.suggestError', { msg: err.message })}</div>`;
   }
 }
 
@@ -889,41 +891,41 @@ async function showVersions() {
   const p = await api.presentations.get(currentPresentation.id);
   const versions = p.versions || [];
 
-  showModal('Versionshistorie', `
+  showModal(t('studio.versionsTitle'), `
     <div class="versions-list">
       ${versions.length === 0
-        ? '<div class="empty-state" style="padding:40px 0"><div class="empty-state-icon">⏱</div><div class="text-muted">Noch keine Versionen. Versionen werden automatisch bei jeder Generierung gespeichert.</div></div>'
+        ? `<div class="empty-state" style="padding:40px 0"><div class="empty-state-icon">⏱</div><div class="text-muted">${t('studio.versionEmpty')}</div></div>`
         : versions.map(v => `
           <div class="version-item">
-            <div class="version-label">${v.label || 'Version'}</div>
+            <div class="version-label">${v.label || t('studio.versionLabel')}</div>
             <div class="version-date">${formatDate(v.timestamp)}</div>
-            <button class="btn btn-ghost btn-sm" onclick="restoreVersion('${v.id}')">Wiederherstellen</button>
+            <button class="btn btn-ghost btn-sm" onclick="restoreVersion('${v.id}')">${t('common.restore')}</button>
           </div>
         `).join('')
       }
     </div>
-  `, `${versions.length} gespeicherte Versionen`);
+  `, t('studio.versionsSubtitle', { count: versions.length }));
 
   window.restoreVersion = async (versionId) => {
-    if (!confirm('Version wiederherstellen? Die aktuelle Version wird als neue Version gespeichert.')) return;
+    if (!confirm(t('studio.restoreConfirm'))) return;
     try {
       await api.presentations.restoreVersion(currentPresentation.id, versionId);
       currentPresentation = await api.presentations.get(currentPresentation.id);
       closeModal();
       loadPreview();
       buildSlideNavigator();
-      toastSuccess('Version wiederhergestellt!');
+      toastSuccess(t('studio.versionRestored'));
     } catch (err) {
-      toastError('Fehler: ' + err.message);
+      toastError(t('common.error') + ': ' + err.message);
     }
   };
 }
 
 async function showShare() {
-  showModal('Präsentation teilen', '<div class="loading-screen" style="height:200px"><div class="loading-orb"></div></div>');
+  showModal(t('studio.shareTitle'), '<div class="loading-screen" style="height:200px"><div class="loading-orb"></div></div>');
 
   try {
-    const [share, userShares] = await Promise.all([
+    const [share] = await Promise.all([
       api.presentations.share(currentPresentation.id),
       api.shares.list(currentPresentation.id).catch(() => [])
     ]);
@@ -931,72 +933,72 @@ async function showShare() {
     const renderShareModal = async () => {
       const shares = await api.shares.list(currentPresentation.id).catch(() => []);
       closeModal();
-      showModal('Präsentation teilen', `
+      showModal(t('studio.shareTitle'), `
         <div style="display:flex;flex-direction:column;gap:20px">
           <!-- Public link -->
           <div>
-            <div class="form-label" style="margin-bottom:8px">Öffentlicher Link (QR-Code)</div>
+            <div class="form-label" style="margin-bottom:8px">${t('studio.publicLinkLabel')}</div>
             <div class="qr-container" style="margin:0">
               <img src="${share.qrDataUrl}" alt="QR Code">
               <div>
                 <div class="share-url">${share.shareUrl}</div>
                 <div class="flex gap-8" style="margin-top:8px">
-                  <button class="btn btn-accent btn-sm" onclick="navigator.clipboard.writeText('${share.shareUrl}').then(()=>window.showCopySuccess())">Kopieren</button>
-                  <button class="btn btn-ghost btn-sm" onclick="window.revokeShare()">Entfernen</button>
+                  <button class="btn btn-accent btn-sm" onclick="navigator.clipboard.writeText('${share.shareUrl}').then(()=>window.showCopySuccess())">${t('studio.copyLink')}</button>
+                  <button class="btn btn-ghost btn-sm" onclick="window.revokeShare()">${t('studio.revokeLink')}</button>
                 </div>
               </div>
             </div>
-            <div class="text-xs text-muted" style="margin-top:6px">Jeder mit diesem Link kann die Präsentation anzeigen · ${currentPresentation.view_count || 0} Views</div>
+            <div class="text-xs text-muted" style="margin-top:6px">${t('studio.publicLinkInfo', { views: currentPresentation.view_count || 0 })}</div>
           </div>
 
           <!-- User shares -->
           <div>
-            <div class="form-label" style="margin-bottom:8px">Benutzer-Freigaben</div>
+            <div class="form-label" style="margin-bottom:8px">${t('studio.userSharesLabel')}</div>
             <div id="user-shares-list" style="margin-bottom:10px">
               ${shares.length === 0
-                ? '<p class="text-muted text-xs">Noch keine Benutzer berechtigt.</p>'
+                ? `<p class="text-muted text-xs">${t('studio.noUserShares')}</p>`
                 : shares.map(s => `
                   <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
                     <span style="flex:1;font-size:13px">${escHtml(s.name)} <span class="text-muted" style="font-size:11px">${escHtml(s.email)}</span></span>
                     <select class="form-select" style="width:100px;padding:4px 8px;font-size:12px" onchange="window.__updateShare('${s.user_id}',this.value)">
-                      ${['read','write','delete'].map(p => `<option value="${p}" ${s.permission===p?'selected':''}>${p==='read'?'Lesen':p==='write'?'Bearbeiten':'Löschen'}</option>`).join('')}
+                      ${['read','write','delete'].map(perm => `<option value="${perm}" ${s.permission===perm?'selected':''}>${perm==='read'?t('common.read'):perm==='write'?t('common.write'):t('common.deletePermission')}</option>`).join('')}
                     </select>
                     <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 8px" onclick="window.__removeShare('${s.user_id}')">✕</button>
                   </div>
                 `).join('')}
             </div>
             <div style="display:flex;gap:8px;align-items:center">
-              <input type="email" class="form-input" id="share-add-email" placeholder="E-Mail des Benutzers" style="flex:1;font-size:13px">
+              <input type="email" class="form-input" id="share-add-email" placeholder="${t('studio.shareAddPlaceholder')}" style="flex:1;font-size:13px">
               <select class="form-select" id="share-add-perm" style="width:110px;font-size:13px">
-                <option value="read">Lesen</option>
-                <option value="write">Bearbeiten</option>
-                <option value="delete">Löschen</option>
+                <option value="read">${t('common.read')}</option>
+                <option value="write">${t('common.write')}</option>
+                <option value="delete">${t('common.deletePermission')}</option>
               </select>
-              <button class="btn btn-primary btn-sm" id="share-add-btn" style="white-space:nowrap">Hinzufügen</button>
+              <button class="btn btn-primary btn-sm" id="share-add-btn" style="white-space:nowrap">${t('studio.shareAddBtn')}</button>
             </div>
             <div id="share-add-error" style="color:var(--danger);font-size:12px;margin-top:4px;display:none"></div>
           </div>
         </div>
-      `, 'Öffentlich teilen & Benutzer berechtigen');
+      `, t('studio.shareSubtitlePublic'));
 
-      window.showCopySuccess = () => toastSuccess('Link kopiert!');
+      window.showCopySuccess = () => toastSuccess(t('studio.shareLinkCopied'));
       window.revokeShare = async () => {
         await api.presentations.unshare(currentPresentation.id);
         closeModal();
-        toastSuccess('Link entfernt');
+        toastSuccess(t('studio.shareLinkRevoked'));
       };
 
       window.__updateShare = async (userId, permission) => {
         try {
           await api.shares.set(currentPresentation.id, userId, permission);
-          toastSuccess('Berechtigung aktualisiert');
+          toastSuccess(t('studio.sharePermUpdated'));
         } catch (err) { toastError(err.message); }
       };
 
       window.__removeShare = async (userId) => {
         try {
           await api.shares.remove(currentPresentation.id, userId);
-          toastSuccess('Freigabe entfernt');
+          toastSuccess(t('studio.shareRemoved'));
           renderShareModal();
         } catch (err) { toastError(err.message); }
       };
@@ -1008,11 +1010,10 @@ async function showShare() {
         errEl.style.display = 'none';
         if (!email) return;
 
-        // Resolve email to userId via user list (admin) or error
         try {
           const users = await api.auth.users.list();
           const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-          if (!user) { errEl.textContent = 'Benutzer nicht gefunden'; errEl.style.display = ''; return; }
+          if (!user) { errEl.textContent = t('studio.shareUserNotFound'); errEl.style.display = ''; return; }
           await api.shares.set(currentPresentation.id, user.id, permission);
           renderShareModal();
         } catch (err) {
@@ -1025,31 +1026,31 @@ async function showShare() {
     renderShareModal();
   } catch (err) {
     closeModal();
-    toastError('Fehler: ' + err.message);
+    toastError(t('studio.shareError', { msg: err.message }));
   }
 }
 
 async function showTemplateChooser() {
   const templates = await api.templates.list();
-  showModal('Template ändern', `
+  showModal(t('studio.templateTitle'), `
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
       <div class="template-card ${!currentPresentation.template_id ? 'selected' : ''}" data-tpl="" style="cursor:pointer">
-        <div class="template-preview" style="background:#1a1a2e;height:80px;font-size:12px;color:rgba(255,255,255,0.5)">Standard</div>
-        <div class="template-info"><div class="template-name">Kein Template</div></div>
+        <div class="template-preview" style="background:#1a1a2e;height:80px;font-size:12px;color:rgba(255,255,255,0.5)">${t('common.slides')}</div>
+        <div class="template-info"><div class="template-name">${t('studio.noTemplateName')}</div></div>
       </div>
-      ${templates.map(t => `
-        <div class="template-card ${currentPresentation.template_id === t.id ? 'selected' : ''}" data-tpl="${t.id}" style="cursor:pointer">
-          <div class="template-preview" style="background:${getTemplateGradient(t.theme)};height:80px;font-size:12px;color:white;font-weight:600">${t.name}</div>
+      ${templates.map(tpl => `
+        <div class="template-card ${currentPresentation.template_id === tpl.id ? 'selected' : ''}" data-tpl="${tpl.id}" style="cursor:pointer">
+          <div class="template-preview" style="background:${getTemplateGradient(tpl.theme)};height:80px;font-size:12px;color:white;font-weight:600">${tpl.name}</div>
           <div class="template-info">
-            <div class="template-name">${t.name}</div>
-            <div class="template-desc">${t.description || ''}</div>
+            <div class="template-name">${tpl.name}</div>
+            <div class="template-desc">${tpl.description || ''}</div>
           </div>
         </div>
       `).join('')}
     </div>
     <div class="flex gap-8" style="justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-ghost" onclick="document.getElementById('modal-close').click()">Abbrechen</button>
-      <button class="btn btn-primary" id="apply-template-btn">Anwenden</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-close').click()">${t('common.cancel')}</button>
+      <button class="btn btn-primary" id="apply-template-btn">${t('common.apply')}</button>
     </div>
   `);
 
@@ -1067,7 +1068,7 @@ async function showTemplateChooser() {
     currentPresentation = await api.presentations.get(currentPresentation.id);
     closeModal();
     loadTemplateInfo();
-    toastSuccess('Template angewendet!');
+    toastSuccess(t('studio.templateApplied'));
   });
 }
 
@@ -1126,7 +1127,7 @@ function getTemplateGradient(theme) {
 
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('de', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString(getCurrentLocale(), { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function escHtml(str) {

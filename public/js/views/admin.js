@@ -4,14 +4,15 @@ import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
 import { showModal, closeModal } from '../components/modal.js';
 import { initPasswordToggles } from '../utils/passwordToggle.js';
+import { t } from '../i18n.js';
 
 export async function renderAdmin(container) {
   if (window.__currentUser?.role !== 'admin') {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">⊘</div>
-        <div class="empty-state-title">Kein Zugriff</div>
-        <div class="empty-state-desc">Dieser Bereich ist nur für Admins.</div>
+        <div class="empty-state-title">${t('admin.noAccess')}</div>
+        <div class="empty-state-desc">${t('admin.noAccessDesc')}</div>
       </div>
     `;
     return;
@@ -20,14 +21,14 @@ export async function renderAdmin(container) {
   container.innerHTML = `
     <div class="view-header">
       <div>
-        <h1 class="view-title">Administration</h1>
-        <p class="view-subtitle">Benutzer verwalten und Zugriffsrechte vergeben</p>
+        <h1 class="view-title">${t('admin.title')}</h1>
+        <p class="view-subtitle">${t('admin.subtitle')}</p>
       </div>
-      <button class="btn btn-primary" id="add-user-btn">+ Benutzer hinzufügen</button>
+      <button class="btn btn-primary" id="add-user-btn">${t('admin.addUserBtn')}</button>
     </div>
 
     <div class="card" style="max-width:900px">
-      <div id="user-list" class="text-muted text-sm">Wird geladen…</div>
+      <div id="user-list" class="text-muted text-sm">${t('admin.loadingUsers')}</div>
     </div>
   `;
 
@@ -48,16 +49,16 @@ async function loadUsers() {
   try {
     const users = await api.auth.users.list();
     if (!users.length) {
-      list.innerHTML = '<p class="text-muted text-sm">Keine Benutzer vorhanden.</p>';
+      list.innerHTML = `<p class="text-muted text-sm">${t('admin.noUsers')}</p>`;
       return;
     }
     list.innerHTML = `
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="border-bottom:1px solid var(--border)">
-            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Name</th>
-            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">E-Mail</th>
-            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Rolle</th>
+            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${t('admin.colName')}</th>
+            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${t('admin.colEmail')}</th>
+            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${t('admin.colRole')}</th>
             <th></th>
           </tr>
         </thead>
@@ -68,16 +69,16 @@ async function loadUsers() {
               <td style="padding:10px 8px;font-size:13px;color:var(--text-muted)">${escHtml(u.email)}</td>
               <td style="padding:10px 8px">
                 ${u.id !== window.__currentUser?.id ? `
-                  <button class="btn btn-ghost btn-sm tag" style="font-size:11px;cursor:pointer;${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}" data-action="toggle-role" data-uid="${escHtml(u.id)}" data-role="${escHtml(u.role)}" title="Rolle ändern">
+                  <button class="btn btn-ghost btn-sm tag" style="font-size:11px;cursor:pointer;${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}" data-action="toggle-role" data-uid="${escHtml(u.id)}" data-role="${escHtml(u.role)}" title="${t('admin.colRole')}">
                     ${escHtml(u.role)} ⇄
                   </button>
                 ` : `<span class="tag" style="${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}">${escHtml(u.role)}</span>`}
               </td>
               <td style="padding:6px 8px;text-align:right;white-space:nowrap">
                 ${u.id !== window.__currentUser?.id ? `
-                  <button class="btn btn-ghost btn-sm" style="font-size:12px" data-action="reset-pw" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}">Passwort</button>
-                  <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--danger)" data-action="delete" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}">✕ Löschen</button>
-                ` : '<span class="text-muted text-xs">(du)</span>'}
+                  <button class="btn btn-ghost btn-sm" style="font-size:12px" data-action="reset-pw" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}">${t('admin.resetPwBtn')}</button>
+                  <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--danger)" data-action="delete" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}">${t('admin.deleteBtn')}</button>
+                ` : `<span class="text-muted text-xs">${t('admin.you')}</span>`}
               </td>
             </tr>
           `).join('')}
@@ -101,11 +102,11 @@ async function loadUsers() {
 
 async function toggleRole(id, currentRole) {
   const newRole = currentRole === 'admin' ? 'user' : 'admin';
-  const label = newRole === 'admin' ? 'zum Admin machen' : 'Admin-Rechte entziehen';
-  if (!confirm(`Benutzer ${label}?`)) return;
+  const label = newRole === 'admin' ? t('admin.toggleRoleAdmin') : t('admin.toggleRoleUser');
+  if (!confirm(t('admin.confirmToggleRole', { label }))) return;
   try {
     await api.auth.users.changeRole(id, newRole);
-    toastSuccess(`Rolle auf "${newRole}" geändert`);
+    toastSuccess(t('admin.roleChanged', { role: newRole }));
     loadUsers();
   } catch (err) {
     toastError(err.message);
@@ -113,10 +114,10 @@ async function toggleRole(id, currentRole) {
 }
 
 async function deleteUser(id, name) {
-  if (!confirm(`Benutzer "${name}" wirklich löschen?`)) return;
+  if (!confirm(t('admin.confirmDeleteUser', { name }))) return;
   try {
     await api.auth.users.delete(id);
-    toastSuccess('Benutzer gelöscht');
+    toastSuccess(t('admin.userDeleted'));
     loadUsers();
   } catch (err) {
     toastError(err.message);
@@ -124,21 +125,21 @@ async function deleteUser(id, name) {
 }
 
 function showResetPasswordForm(id, name) {
-  showModal(`Passwort ändern`, `
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Neues Passwort für <strong>${escHtml(name)}</strong></p>
+  showModal(t('admin.resetPwTitle'), `
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">${t('admin.resetPwFor')} <strong>${escHtml(name)}</strong></p>
     <div class="form-group">
-      <label class="form-label">Neues Passwort (mind. 8 Zeichen)</label>
+      <label class="form-label">${t('admin.resetPwLabel')}</label>
       <div class="password-wrapper">
         <input type="password" class="form-input" id="reset-pw-input" placeholder="••••••••">
-        <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+        <button type="button" class="password-toggle" title="${t('admin.resetPwLabel')}">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
     </div>
     <div id="reset-pw-error" style="color:var(--danger);font-size:13px;display:none"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-ghost" onclick="window.__modalApi.closeModal()">Abbrechen</button>
-      <button class="btn btn-primary" id="reset-pw-confirm-btn">Speichern</button>
+      <button class="btn btn-ghost" onclick="window.__modalApi.closeModal()">${t('common.cancel')}</button>
+      <button class="btn btn-primary" id="reset-pw-confirm-btn">${t('admin.resetPwSave')}</button>
     </div>
   `);
 
@@ -151,7 +152,7 @@ function showResetPasswordForm(id, name) {
     try {
       await api.auth.users.resetPassword(id, pw);
       closeModal();
-      toastSuccess('Passwort geändert');
+      toastSuccess(t('admin.pwChanged'));
     } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
@@ -160,35 +161,35 @@ function showResetPasswordForm(id, name) {
 }
 
 function showAddUserForm() {
-  showModal('Benutzer hinzufügen', `
+  showModal(t('admin.addUserTitle'), `
     <div class="form-group">
-      <label class="form-label">Name</label>
-      <input type="text" class="form-input" id="new-user-name" placeholder="Max Mustermann">
+      <label class="form-label">${t('admin.nameLabel')}</label>
+      <input type="text" class="form-input" id="new-user-name" placeholder="${t('admin.namePlaceholder')}">
     </div>
     <div class="form-group">
-      <label class="form-label">E-Mail</label>
-      <input type="email" class="form-input" id="new-user-email" placeholder="max@firma.de">
+      <label class="form-label">${t('admin.emailLabel')}</label>
+      <input type="email" class="form-input" id="new-user-email" placeholder="${t('admin.emailPlaceholder')}">
     </div>
     <div class="form-group">
-      <label class="form-label">Passwort (mind. 8 Zeichen)</label>
+      <label class="form-label">${t('admin.passwordLabel')}</label>
       <div class="password-wrapper">
         <input type="password" class="form-input" id="new-user-password">
-        <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+        <button type="button" class="password-toggle" title="${t('admin.passwordLabel')}">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Rolle</label>
+      <label class="form-label">${t('admin.roleLabel')}</label>
       <select class="form-select" id="new-user-role">
-        <option value="user">Benutzer</option>
-        <option value="admin">Admin</option>
+        <option value="user">${t('admin.roleUser')}</option>
+        <option value="admin">${t('admin.roleAdmin')}</option>
       </select>
     </div>
     <div id="new-user-error" style="color:var(--danger);font-size:13px;display:none"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-ghost" onclick="window.__modalApi.closeModal()">Abbrechen</button>
-      <button class="btn btn-primary" id="create-user-confirm-btn">Erstellen</button>
+      <button class="btn btn-ghost" onclick="window.__modalApi.closeModal()">${t('admin.cancelBtn')}</button>
+      <button class="btn btn-primary" id="create-user-confirm-btn">${t('admin.createBtn')}</button>
     </div>
   `);
 
@@ -205,7 +206,7 @@ function showAddUserForm() {
         role: document.getElementById('new-user-role').value
       });
       closeModal();
-      toastSuccess('Benutzer erstellt');
+      toastSuccess(t('admin.userCreated'));
       loadUsers();
     } catch (err) {
       errEl.textContent = err.message;

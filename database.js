@@ -133,7 +133,7 @@ const defaultSettings = {
     font: 'Inter', style: 'modern', tagline: '', tone: 'professional'
   },
   preferences: {
-    defaultSlideCount: 10, language: 'de', mainModel: 'claude-sonnet-4-6'
+    defaultSlideCount: 10, language: 'en', mainModel: 'claude-sonnet-4-6'
   }
 };
 const seedSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value, user_id) VALUES (?, ?, '')");
