@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
 import { initPasswordToggles } from '../utils/passwordToggle.js';
 import { t, setLanguage } from '../i18n.js';
+import { rerenderCurrentView } from '../router.js';
 
 function escHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -274,6 +275,7 @@ export async function renderSettings(container) {
       await api.settings.update(data);
       setLanguage(newLang);
       toastSuccess(t('settings.settingsSaved'));
+      rerenderCurrentView();
     } catch (err) {
       toastError(t('settings.settingsError', { msg: err.message }));
     }

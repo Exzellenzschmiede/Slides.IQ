@@ -305,6 +305,12 @@ const LOCALES = {
       createBtn: 'Create',
       userCreated: 'User created',
     },
+    nav: {
+      dashboard: 'My Slides',
+      templates: 'Templates',
+      settings: 'Settings',
+      admin: 'Administration',
+    },
   },
 
   // ─── German ───────────────────────────────────────────────────────────────
@@ -609,6 +615,12 @@ const LOCALES = {
       cancelBtn: 'Abbrechen',
       createBtn: 'Erstellen',
       userCreated: 'Benutzer erstellt',
+    },
+    nav: {
+      dashboard: 'Meine Slides',
+      templates: 'Templates',
+      settings: 'Einstellungen',
+      admin: 'Administration',
     },
   },
 
@@ -915,6 +927,12 @@ const LOCALES = {
       createBtn: 'Crea',
       userCreated: 'Utente creato',
     },
+    nav: {
+      dashboard: 'Le mie slide',
+      templates: 'Template',
+      settings: 'Impostazioni',
+      admin: 'Amministrazione',
+    },
   },
 
   // ─── Dutch ────────────────────────────────────────────────────────────────
@@ -1219,6 +1237,12 @@ const LOCALES = {
       cancelBtn: 'Annuleren',
       createBtn: 'Aanmaken',
       userCreated: 'Gebruiker aangemaakt',
+    },
+    nav: {
+      dashboard: 'Mijn Slides',
+      templates: 'Templates',
+      settings: 'Instellingen',
+      admin: 'Administratie',
     },
   },
 
@@ -1525,6 +1549,12 @@ const LOCALES = {
       createBtn: 'Utwórz',
       userCreated: 'Użytkownik utworzony',
     },
+    nav: {
+      dashboard: 'Moje Slajdy',
+      templates: 'Szablony',
+      settings: 'Ustawienia',
+      admin: 'Administracja',
+    },
   },
 };
 
@@ -1533,11 +1563,17 @@ const LOCALES = {
 let _currentLocale = 'en';
 
 export function setLanguage(lang) {
-  if (LOCALES[lang]) {
-    _currentLocale = lang;
-  } else {
-    _currentLocale = 'en';
+  _currentLocale = LOCALES[lang] ? lang : 'en';
+
+  // Update nav labels in the DOM (if the sidebar is already rendered)
+  const navMap = { dashboard: 'dashboard', templates: 'templates', settings: 'settings', admin: 'admin' };
+  for (const [view, key] of Object.entries(navMap)) {
+    const el = document.querySelector(`.nav-item[data-view="${view}"] .nav-label`);
+    if (el) el.textContent = t(`nav.${key}`);
   }
+
+  // Update the html[lang] attribute
+  document.documentElement.lang = _currentLocale;
 }
 
 export function getCurrentLocale() {

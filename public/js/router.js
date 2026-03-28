@@ -2,6 +2,7 @@
 
 const routes = {};
 let currentView = null;
+let _renderFn = null;
 
 export function registerView(name, renderFn) {
   routes[name] = renderFn;
@@ -16,6 +17,10 @@ export function parseRoute() {
   const hash = window.location.hash.slice(1) || 'dashboard';
   const parts = hash.split('/');
   return { view: parts[0], id: parts[1] || null };
+}
+
+export function rerenderCurrentView() {
+  if (_renderFn) _renderFn();
 }
 
 export function initRouter(container) {
@@ -47,6 +52,7 @@ export function initRouter(container) {
     }
   }
 
+  _renderFn = render;
   window.addEventListener('hashchange', render);
   render();
 }
