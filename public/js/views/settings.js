@@ -1,10 +1,9 @@
 // ─── Settings View ────────────────────────────────────────────────────────
 
 import { api } from '../api.js';
-import { toastSuccess, toastError } from '../components/toast.js';
+import { toastError } from '../components/toast.js';
 import { initPasswordToggles } from '../utils/passwordToggle.js';
 import { t, setLanguage } from '../i18n.js';
-import { rerenderCurrentView } from '../router.js';
 
 function escHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -21,9 +20,8 @@ export async function renderSettings(container) {
     <div class="view-header">
       <div>
         <h1 class="view-title">${t('settings.title')}</h1>
-        <p class="view-subtitle">${t('settings.subtitle')}</p>
+        <p class="view-subtitle" id="settings-status" style="transition:color .3s">${t('settings.subtitle')}</p>
       </div>
-      <button class="btn btn-primary" id="save-settings-btn">${t('settings.saveBtn')}</button>
     </div>
 
     <div class="settings-grid">
@@ -178,7 +176,103 @@ export async function renderSettings(container) {
 
   initPasswordToggles(container);
 
-  // Password change
+  // ─── Auto-save ────────────────────────────────────────────────────────────
+
+  const statusEl = document.getElementById('settings-status');
+  let saveTimer = null;
+
+  function showStatus(state) {
+    if (state === 'saving') {
+      statusEl.textContent = t('settings.statusSaving');
+      statusEl.style.color = 'var(--text-muted)';
+    } else if (state === 'saved') {
+      statusEl.textContent = '✓ ' + t('settings.statusSaved');
+      statusEl.style.color = 'var(--success)';
+      setTimeout(() => {
+        if (statusEl) {
+          statusEl.textContent = t('settings.subtitle');
+          statusEl.style.color = '';
+        }
+      }, 2500);
+    } else if (state === 'error') {
+      statusEl.textContent = t('settings.statusError');
+      statusEl.style.color = 'var(--danger)';
+    }
+  }
+
+  async function saveAll() {
+    const newLang = document.getElementById('pref-lang').value;
+    showStatus('saving');
+    try {
+      await Promise.all([
+        api.settings.update({
+          brand: {
+            name: document.getElementById('brand-name').value,
+            primaryColor: document.getElementById('brand-primary-text').value,
+            accentColor: document.getElementById('brand-accent-text').value,
+            font: document.getElementById('brand-font').value,
+            style: document.getElementById('brand-style').value,
+            tagline: document.getElementById('brand-tagline').value,
+            tone: document.getElementById('brand-tone').value
+          },
+          preferences: {
+            language: newLang,
+            mainModel: document.getElementById('pref-model').value
+          }
+        }),
+        api.auth.updateProfile({
+          name: document.getElementById('profile-name').value.trim(),
+          email: document.getElementById('profile-email').value.trim()
+        }).then(result => {
+          window.__currentUser = { ...window.__currentUser, name: result.name, email: result.email };
+          const nameEl = document.getElementById('sidebar-user-name');
+          if (nameEl) nameEl.textContent = result.name;
+        })
+      ]);
+      setLanguage(newLang);
+      showStatus('saved');
+    } catch (err) {
+      showStatus('error');
+      toastError(err.message);
+    }
+  }
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveAll, 800);
+  }
+
+  // Wire up all auto-save inputs (everything except password fields)
+  const autoSaveIds = [
+    'pref-model', 'brand-name', 'brand-primary-text', 'brand-accent-text',
+    'brand-font', 'brand-style', 'brand-tagline', 'brand-tone',
+    'profile-name', 'profile-email', 'pref-lang'
+  ];
+  autoSaveIds.forEach(id => {
+    document.getElementById(id)?.addEventListener('input', scheduleSave);
+    document.getElementById(id)?.addEventListener('change', scheduleSave);
+  });
+
+  // Color picker syncs + also triggers auto-save
+  ['primary', 'accent'].forEach(type => {
+    const picker = document.getElementById(`brand-${type}`);
+    const text = document.getElementById(`brand-${type}-text`);
+    picker?.addEventListener('input', () => {
+      if (text) text.value = picker.value;
+      scheduleSave();
+    });
+    text?.addEventListener('input', () => {
+      if (/^#[0-9a-f]{6}$/i.test(text.value)) picker.value = text.value;
+    });
+  });
+
+  // Language: apply immediately on change (nav labels etc.)
+  document.getElementById('pref-lang')?.addEventListener('change', () => {
+    setLanguage(document.getElementById('pref-lang').value);
+  });
+
+  // ─── Password change (manual) ─────────────────────────────────────────────
+
   document.getElementById('change-pw-btn').addEventListener('click', async () => {
     const errEl = document.getElementById('pw-error');
     errEl.style.display = 'none';
@@ -197,24 +291,15 @@ export async function renderSettings(container) {
       document.getElementById('pw-current').value = '';
       document.getElementById('pw-new').value = '';
       document.getElementById('pw-confirm').value = '';
-      toastSuccess(t('settings.pwChanged'));
+      showStatus('saved');
     } catch (err) {
       errEl.textContent = err.message;
       errEl.style.display = '';
     }
   });
 
-  // Color sync
-  ['primary', 'accent'].forEach(type => {
-    const picker = document.getElementById(`brand-${type}`);
-    const text = document.getElementById(`brand-${type}-text`);
-    picker?.addEventListener('input', () => { if (text) text.value = picker.value; });
-    text?.addEventListener('input', () => {
-      if (/^#[0-9a-f]{6}$/i.test(text.value)) picker.value = text.value;
-    });
-  });
+  // ─── API status ───────────────────────────────────────────────────────────
 
-  // Check API status
   api.ai.status().then(status => {
     const el = document.getElementById('api-key-status');
     if (!el) return;
@@ -229,44 +314,5 @@ export async function renderSettings(container) {
   }).catch(() => {
     const el = document.getElementById('api-key-status');
     if (el) el.textContent = t('settings.apiKeyUnavailable');
-  });
-
-  // Save
-  document.getElementById('save-settings-btn').addEventListener('click', async () => {
-    const newLang = document.getElementById('pref-lang').value;
-    const data = {
-      brand: {
-        name: document.getElementById('brand-name').value,
-        primaryColor: document.getElementById('brand-primary-text').value,
-        accentColor: document.getElementById('brand-accent-text').value,
-        font: document.getElementById('brand-font').value,
-        style: document.getElementById('brand-style').value,
-        tagline: document.getElementById('brand-tagline').value,
-        tone: document.getElementById('brand-tone').value
-      },
-      preferences: {
-        language: newLang,
-        mainModel: document.getElementById('pref-model').value
-      }
-    };
-
-    try {
-      await Promise.all([
-        api.settings.update(data),
-        api.auth.updateProfile({
-          name: document.getElementById('profile-name').value.trim(),
-          email: document.getElementById('profile-email').value.trim()
-        }).then(result => {
-          window.__currentUser = { ...window.__currentUser, name: result.name, email: result.email };
-          const nameEl = document.getElementById('sidebar-user-name');
-          if (nameEl) nameEl.textContent = result.name;
-        })
-      ]);
-      setLanguage(newLang);
-      toastSuccess(t('settings.settingsSaved'));
-      rerenderCurrentView();
-    } catch (err) {
-      toastError(t('settings.settingsError', { msg: err.message }));
-    }
   });
 }

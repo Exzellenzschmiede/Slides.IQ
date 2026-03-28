@@ -266,6 +266,9 @@ const LOCALES = {
       pwChanged: 'Password changed',
       settingsSaved: 'Settings saved!',
       settingsError: 'Error: {{msg}}',
+      statusSaving: 'Saving…',
+      statusSaved: 'Saved',
+      statusError: 'Save failed',
     },
     admin: {
       title: 'Administration',
@@ -577,6 +580,9 @@ const LOCALES = {
       pwChanged: 'Passwort geändert',
       settingsSaved: 'Einstellungen gespeichert!',
       settingsError: 'Fehler: {{msg}}',
+      statusSaving: 'Wird gespeichert…',
+      statusSaved: 'Gespeichert',
+      statusError: 'Speichern fehlgeschlagen',
     },
     admin: {
       title: 'Administration',
@@ -888,6 +894,9 @@ const LOCALES = {
       pwChanged: 'Password cambiata',
       settingsSaved: 'Impostazioni salvate!',
       settingsError: 'Errore: {{msg}}',
+      statusSaving: 'Salvataggio…',
+      statusSaved: 'Salvato',
+      statusError: 'Salvataggio fallito',
     },
     admin: {
       title: 'Amministrazione',
@@ -1199,6 +1208,9 @@ const LOCALES = {
       pwChanged: 'Wachtwoord gewijzigd',
       settingsSaved: 'Instellingen opgeslagen!',
       settingsError: 'Fout: {{msg}}',
+      statusSaving: 'Opslaan…',
+      statusSaved: 'Opgeslagen',
+      statusError: 'Opslaan mislukt',
     },
     admin: {
       title: 'Beheer',
@@ -1510,6 +1522,9 @@ const LOCALES = {
       pwChanged: 'Hasło zmienione',
       settingsSaved: 'Ustawienia zapisane!',
       settingsError: 'Błąd: {{msg}}',
+      statusSaving: 'Zapisywanie…',
+      statusSaved: 'Zapisano',
+      statusError: 'Błąd zapisu',
     },
     admin: {
       title: 'Administracja',
