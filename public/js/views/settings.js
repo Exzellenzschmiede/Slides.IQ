@@ -139,8 +139,6 @@ export async function renderSettings(container) {
             <option value="pl" ${(prefs.language || 'en') === 'pl' ? 'selected' : ''}>${t('settings.langPl')}</option>
           </select>
         </div>
-        <div id="profile-error" style="color:var(--danger);font-size:13px;display:none"></div>
-        <button class="btn btn-primary btn-sm" id="save-profile-btn">${t('settings.saveProfileBtn')}</button>
       </div>
 
       <div class="card">
@@ -179,25 +177,6 @@ export async function renderSettings(container) {
   `;
 
   initPasswordToggles(container);
-
-  // Profile
-  document.getElementById('save-profile-btn').addEventListener('click', async () => {
-    const errEl = document.getElementById('profile-error');
-    errEl.style.display = 'none';
-    try {
-      const result = await api.auth.updateProfile({
-        name: document.getElementById('profile-name').value.trim(),
-        email: document.getElementById('profile-email').value.trim()
-      });
-      window.__currentUser = { ...window.__currentUser, name: result.name, email: result.email };
-      const nameEl = document.getElementById('sidebar-user-name');
-      if (nameEl) nameEl.textContent = result.name;
-      toastSuccess(t('settings.profileSaved'));
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.style.display = '';
-    }
-  });
 
   // Password change
   document.getElementById('change-pw-btn').addEventListener('click', async () => {
@@ -272,7 +251,17 @@ export async function renderSettings(container) {
     };
 
     try {
-      await api.settings.update(data);
+      await Promise.all([
+        api.settings.update(data),
+        api.auth.updateProfile({
+          name: document.getElementById('profile-name').value.trim(),
+          email: document.getElementById('profile-email').value.trim()
+        }).then(result => {
+          window.__currentUser = { ...window.__currentUser, name: result.name, email: result.email };
+          const nameEl = document.getElementById('sidebar-user-name');
+          if (nameEl) nameEl.textContent = result.name;
+        })
+      ]);
       setLanguage(newLang);
       toastSuccess(t('settings.settingsSaved'));
       rerenderCurrentView();
