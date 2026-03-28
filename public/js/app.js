@@ -6,6 +6,7 @@ import { renderDashboard } from './views/dashboard.js';
 import { renderStudio } from './views/studio.js';
 import { renderTemplates } from './views/templates.js';
 import { renderSettings } from './views/settings.js';
+import { renderAdmin } from './views/admin.js';
 import { api } from './api.js';
 import { initPasswordToggles } from './utils/passwordToggle.js';
 
@@ -15,6 +16,7 @@ registerView('dashboard', renderDashboard);
 registerView('studio', renderStudio);
 registerView('templates', renderTemplates);
 registerView('settings', renderSettings);
+registerView('admin', renderAdmin);
 
 // ─── Initialize app ───────────────────────────────────────────────────────
 
@@ -145,8 +147,13 @@ function setCurrentUser(user) {
   const nameEl = document.getElementById('sidebar-user-name');
   if (nameEl) nameEl.textContent = user.name || user.email;
 
-  // Store role for settings view
+  // Store role for views
   window.__currentUser = user;
+
+  // Show admin nav item for admins
+  if (user.role === 'admin') {
+    document.getElementById('nav-admin')?.classList.remove('hidden');
+  }
 
   // Logout button
   const logoutBtn = document.getElementById('sidebar-logout-btn');

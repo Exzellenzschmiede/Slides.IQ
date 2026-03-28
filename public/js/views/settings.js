@@ -2,8 +2,6 @@
 
 import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
-import { showModal, closeModal } from '../components/modal.js';
-import { initPasswordToggles } from '../utils/passwordToggle.js';
 
 export async function renderSettings(container) {
   let settings = {};
@@ -135,18 +133,6 @@ export async function renderSettings(container) {
         </div>
       </div>
 
-      ${window.__currentUser?.role === 'admin' ? `
-      <!-- User Management -->
-      <div class="settings-section">
-        <div class="settings-section-title">Benutzerverwaltung</div>
-      </div>
-      <div class="card" style="grid-column:span 2" id="user-mgmt-card">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-          <button class="btn btn-primary btn-sm" id="add-user-btn">+ Benutzer hinzufügen</button>
-        </div>
-        <div id="user-list">Wird geladen…</div>
-      </div>
-      ` : ''}
 
     </div>
   `;
@@ -177,15 +163,6 @@ export async function renderSettings(container) {
     document.getElementById('api-key-status').textContent = 'Status nicht verfügbar';
   });
 
-  // User management (admin only)
-  if (window.__currentUser?.role === 'admin') {
-    loadUsers();
-
-    document.getElementById('add-user-btn')?.addEventListener('click', () => {
-      showAddUserForm();
-    });
-  }
-
   // Save
   document.getElementById('save-settings-btn').addEventListener('click', async () => {
     const data = {
@@ -214,118 +191,3 @@ export async function renderSettings(container) {
   });
 }
 
-// ─── User Management Helpers ──────────────────────────────────────────────
-
-function escHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-async function loadUsers() {
-  const list = document.getElementById('user-list');
-  if (!list) return;
-  try {
-    const users = await api.auth.users.list();
-    if (!users.length) { list.innerHTML = '<p class="text-muted text-sm">Keine Benutzer.</p>'; return; }
-    list.innerHTML = `
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="border-bottom:1px solid var(--border)">
-            <th style="text-align:left;padding:8px 4px;font-size:12px;color:var(--text-muted)">Name</th>
-            <th style="text-align:left;padding:8px 4px;font-size:12px;color:var(--text-muted)">E-Mail</th>
-            <th style="text-align:left;padding:8px 4px;font-size:12px;color:var(--text-muted)">Rolle</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${users.map(u => `
-            <tr style="border-bottom:1px solid var(--border)" data-uid="${u.id}">
-              <td style="padding:8px 4px;font-size:13px">${escHtml(u.name)}</td>
-              <td style="padding:8px 4px;font-size:13px;color:var(--text-muted)">${escHtml(u.email)}</td>
-              <td style="padding:8px 4px"><span class="tag" style="${u.role==='admin'?'background:rgba(124,58,237,.2);color:#a78bfa':''}">${u.role}</span></td>
-              <td style="padding:4px;text-align:right;white-space:nowrap">
-                ${u.id !== window.__currentUser?.id ? `
-                  <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="window.__resetPw('${u.id}','${escHtml(u.name)}')">Passwort</button>
-                  <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--danger)" onclick="window.__deleteUser('${u.id}','${escHtml(u.name)}')">✕</button>
-                ` : '<span class="text-muted text-xs">(du)</span>'}
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-  } catch (err) {
-    list.innerHTML = `<p style="color:var(--danger)">${escHtml(err.message)}</p>`;
-  }
-
-  window.__deleteUser = async (id, name) => {
-    if (!confirm(`Benutzer "${name}" wirklich löschen?`)) return;
-    try {
-      await api.auth.users.delete(id);
-      toastSuccess('Benutzer gelöscht');
-      loadUsers();
-    } catch (err) { toastError(err.message); }
-  };
-
-  window.__resetPw = (id, name) => {
-    const pw = prompt(`Neues Passwort für "${name}" (mind. 8 Zeichen):`);
-    if (!pw) return;
-    api.auth.users.resetPassword(id, pw)
-      .then(() => toastSuccess('Passwort geändert'))
-      .catch(err => toastError(err.message));
-  };
-}
-
-function showAddUserForm() {
-  showModal('Benutzer hinzufügen', `
-    <div class="form-group">
-      <label class="form-label">Name</label>
-      <input type="text" class="form-input" id="new-user-name" placeholder="Max Mustermann">
-    </div>
-    <div class="form-group">
-      <label class="form-label">E-Mail</label>
-      <input type="email" class="form-input" id="new-user-email" placeholder="max@firma.de">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Passwort (mind. 8 Zeichen)</label>
-      <div class="password-wrapper">
-        <input type="password" class="form-input" id="new-user-password">
-        <button type="button" class="password-toggle" data-target="new-user-password" title="Passwort anzeigen/verstecken">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button>
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Rolle</label>
-      <select class="form-select" id="new-user-role">
-        <option value="user">Benutzer</option>
-        <option value="admin">Admin</option>
-      </select>
-    </div>
-    <div id="new-user-error" style="color:var(--danger);font-size:13px;display:none"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-ghost" onclick="window.__modalApi.closeModal()">Abbrechen</button>
-      <button class="btn btn-primary" id="create-user-confirm-btn">Erstellen</button>
-    </div>
-  `);
-
-  initPasswordToggles(document);
-
-  document.getElementById('create-user-confirm-btn')?.addEventListener('click', async () => {
-    const errEl = document.getElementById('new-user-error');
-    errEl.style.display = 'none';
-    try {
-      await api.auth.users.create({
-        name: document.getElementById('new-user-name').value.trim(),
-        email: document.getElementById('new-user-email').value.trim(),
-        password: document.getElementById('new-user-password').value,
-        role: document.getElementById('new-user-role').value
-      });
-      closeModal();
-      toastSuccess('Benutzer erstellt');
-      loadUsers();
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.style.display = '';
-    }
-  });
-}
