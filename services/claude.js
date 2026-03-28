@@ -23,14 +23,14 @@ const PRESENTATION_FRAMEWORK = `${FRAMEWORK_START}
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   width: 100%; height: 100%; overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
 }
-body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var(--bg, #05070f); color: var(--text, #e2e8f0); }
+body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var(--bg, #05070f); color: var(--text, #e2e8f0); position: relative; }
 
 #nexus-presentation {
-  position: relative;
+  position: absolute;
+  top: 50%; left: 50%;
   width: 1280px; height: 720px;
-  overflow: hidden; flex-shrink: 0;
+  overflow: hidden;
   transform-origin: center center;
 }
 
@@ -263,16 +263,18 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     if (e.data && e.data.type === 'nexus-prev') goto(current - 1);
   });
 
-  // Viewport scaling — always render at 1280×720, scale to fit
+  // Viewport scaling — always render at 1280×720, scale to fit viewport
   function scalePresentation() {
     var pres = document.getElementById('nexus-presentation');
     if (!pres) return;
-    var controlsH = document.getElementById('nexus-controls') ? 56 : 0;
+    var controls = document.getElementById('nexus-controls');
+    var controlsH = controls ? controls.offsetHeight : 0;
     var scale = Math.min(window.innerWidth / 1280, (window.innerHeight - controlsH) / 720);
-    pres.style.transform = 'scale(' + scale + ')';
+    pres.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
   }
   scalePresentation();
   window.addEventListener('resize', scalePresentation);
+  document.addEventListener('fullscreenchange', scalePresentation);
 
   // Init
   goto(0);

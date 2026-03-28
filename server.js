@@ -156,6 +156,27 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
+// ─── Startup: re-inject framework into all existing presentations ─────────
+
+(function migrateFrameworks() {
+  try {
+    const db = require('./database');
+    const { injectFramework } = require('./services/claude');
+    const rows = db.prepare('SELECT id, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ""').all();
+    const update = db.prepare('UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime("now") WHERE id = ?');
+    let count = 0;
+    for (const row of rows) {
+      const fixed = injectFramework(row.html_content);
+      const slides = (fixed.match(/class="slide(?:\s|")/g) || []).length;
+      update.run(fixed, slides, row.id);
+      count++;
+    }
+    if (count) console.log(`[startup] Framework re-injected into ${count} presentation(s)`);
+  } catch (e) {
+    console.warn('[startup] Framework migration failed:', e.message);
+  }
+})();
+
 // ─── Start ────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
