@@ -101,6 +101,44 @@ for (const sql of migrations) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
 }
 
+// Fix settings table: the original schema had `key TEXT PRIMARY KEY` (single-column),
+// which means different users sharing the same key overwrote each other's settings.
+// Rebuild with composite PRIMARY KEY (key, user_id).
+const settingsDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='settings'").get();
+if (settingsDef && !settingsDef.sql.includes('user_id')) {
+  // user_id column not yet present — add it first so the rebuild can copy it
+  try { db.exec("ALTER TABLE settings ADD COLUMN user_id TEXT NOT NULL DEFAULT ''"); } catch (_) {}
+}
+if (settingsDef && !/PRIMARY KEY\s*\(\s*key\s*,\s*user_id\s*\)/i.test(settingsDef.sql)) {
+  db.exec(`
+    CREATE TABLE settings_new (
+      key     TEXT NOT NULL,
+      value   TEXT NOT NULL,
+      user_id TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY (key, user_id)
+    );
+    INSERT OR IGNORE INTO settings_new (key, value, user_id)
+      SELECT key, value, COALESCE(user_id, '') FROM settings;
+    DROP TABLE settings;
+    ALTER TABLE settings_new RENAME TO settings;
+  `);
+}
+
+// Seed global default settings (user_id = '') if not yet present
+const defaultSettings = {
+  brand: {
+    name: '', primaryColor: '#7c3aed', accentColor: '#06b6d4',
+    font: 'Inter', style: 'modern', tagline: '', tone: 'professional'
+  },
+  preferences: {
+    defaultSlideCount: 10, language: 'de', mainModel: 'claude-sonnet-4-6'
+  }
+};
+const seedSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value, user_id) VALUES (?, ?, '')");
+for (const [key, value] of Object.entries(defaultSettings)) {
+  seedSetting.run(key, JSON.stringify(value));
+}
+
 // Seed default templates
 const templateCount = db.prepare('SELECT COUNT(*) as c FROM templates').get();
 if (templateCount.c === 0) {
