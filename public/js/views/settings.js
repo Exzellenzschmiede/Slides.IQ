@@ -2,6 +2,11 @@
 
 import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
+import { initPasswordToggles } from '../utils/passwordToggle.js';
+
+function escHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 export async function renderSettings(container) {
   let settings = {};
@@ -133,9 +138,105 @@ export async function renderSettings(container) {
         </div>
       </div>
 
+      <!-- Mein Konto -->
+      <div class="settings-section">
+        <div class="settings-section-title">Mein Konto</div>
+      </div>
+
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-input" id="profile-name" value="${escHtml(window.__currentUser?.name || '')}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">E-Mail</label>
+          <input type="email" class="form-input" id="profile-email" value="${escHtml(window.__currentUser?.email || '')}">
+        </div>
+        <div id="profile-error" style="color:var(--danger);font-size:13px;display:none"></div>
+        <button class="btn btn-primary btn-sm" id="save-profile-btn">Profil speichern</button>
+      </div>
+
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label">Aktuelles Passwort</label>
+          <div class="password-wrapper">
+            <input type="password" class="form-input" id="pw-current" placeholder="••••••••" autocomplete="current-password">
+            <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Neues Passwort (mind. 8 Zeichen)</label>
+          <div class="password-wrapper">
+            <input type="password" class="form-input" id="pw-new" placeholder="••••••••" autocomplete="new-password">
+            <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Neues Passwort bestätigen</label>
+          <div class="password-wrapper">
+            <input type="password" class="form-input" id="pw-confirm" placeholder="••••••••" autocomplete="new-password">
+            <button type="button" class="password-toggle" title="Passwort anzeigen/verstecken">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="pw-error" style="color:var(--danger);font-size:13px;display:none"></div>
+        <button class="btn btn-primary btn-sm" id="change-pw-btn">Passwort ändern</button>
+      </div>
 
     </div>
   `;
+
+  initPasswordToggles(container);
+
+  // Profile
+  document.getElementById('save-profile-btn').addEventListener('click', async () => {
+    const errEl = document.getElementById('profile-error');
+    errEl.style.display = 'none';
+    try {
+      const result = await api.auth.updateProfile({
+        name: document.getElementById('profile-name').value.trim(),
+        email: document.getElementById('profile-email').value.trim()
+      });
+      window.__currentUser = { ...window.__currentUser, name: result.name, email: result.email };
+      const nameEl = document.getElementById('sidebar-user-name');
+      if (nameEl) nameEl.textContent = result.name;
+      toastSuccess('Profil gespeichert');
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = '';
+    }
+  });
+
+  // Password change
+  document.getElementById('change-pw-btn').addEventListener('click', async () => {
+    const errEl = document.getElementById('pw-error');
+    errEl.style.display = 'none';
+    const newPw = document.getElementById('pw-new').value;
+    const confirmPw = document.getElementById('pw-confirm').value;
+    if (newPw !== confirmPw) {
+      errEl.textContent = 'Die neuen Passwörter stimmen nicht überein';
+      errEl.style.display = '';
+      return;
+    }
+    try {
+      await api.auth.changePassword({
+        currentPassword: document.getElementById('pw-current').value,
+        newPassword: newPw
+      });
+      document.getElementById('pw-current').value = '';
+      document.getElementById('pw-new').value = '';
+      document.getElementById('pw-confirm').value = '';
+      toastSuccess('Passwort geändert');
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = '';
+    }
+  });
 
   // Color sync
   ['primary', 'accent'].forEach(type => {

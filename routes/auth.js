@@ -65,6 +65,36 @@ router.get('/me', requireAuth, (req, res) => {
   res.json(user);
 });
 
+// ─── Update own profile ───────────────────────────────────────────────────
+
+router.put('/me', requireAuth, (req, res) => {
+  const { name, email } = req.body;
+  if (!name || !email) return res.status(400).json({ error: 'Name und E-Mail erforderlich' });
+
+  const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.toLowerCase().trim(), req.session.userId);
+  if (existing) return res.status(409).json({ error: 'E-Mail bereits vergeben' });
+
+  db.prepare('UPDATE users SET name = ?, email = ? WHERE id = ?').run(name.trim(), email.toLowerCase().trim(), req.session.userId);
+  req.session.name = name.trim();
+  res.json({ ok: true, name: name.trim(), email: email.toLowerCase().trim() });
+});
+
+// ─── Change own password ──────────────────────────────────────────────────
+
+router.put('/me/password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'Neues Passwort mindestens 8 Zeichen' });
+
+  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.session.userId);
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Aktuelles Passwort falsch' });
+
+  const hash = await bcrypt.hash(newPassword, 12);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.session.userId);
+  res.json({ ok: true });
+});
+
 // ─── Admin: User list ─────────────────────────────────────────────────────
 
 router.get('/users', requireAdmin, (req, res) => {

@@ -138,6 +138,8 @@ export const api = {
     login: (data) => apiFetch('/auth/login', { method: 'POST', body: data }),
     logout: () => apiFetch('/auth/logout', { method: 'POST' }),
     me: () => apiFetch('/auth/me'),
+    updateProfile: (data) => apiFetch('/auth/me', { method: 'PUT', body: data }),
+    changePassword: (data) => apiFetch('/auth/me/password', { method: 'PUT', body: data }),
     users: {
       list: () => apiFetch('/auth/users'),
       create: (data) => apiFetch('/auth/users', { method: 'POST', body: data }),
