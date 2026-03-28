@@ -146,6 +146,7 @@ export const api = {
       create: (data) => apiFetch('/auth/users', { method: 'POST', body: data }),
       delete: (id) => apiFetch(`/auth/users/${id}`, { method: 'DELETE' }),
       resetPassword: (id, password) => apiFetch(`/auth/users/${id}/password`, { method: 'PUT', body: { password } }),
+      changeRole: (id, role) => apiFetch(`/auth/users/${id}/role`, { method: 'PUT', body: { role } }),
     }
   },
 

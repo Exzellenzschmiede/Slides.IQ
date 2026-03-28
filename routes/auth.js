@@ -128,6 +128,17 @@ router.delete('/users/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Admin: Change role ───────────────────────────────────────────────────
+
+router.put('/users/:id/role', requireAdmin, (req, res) => {
+  const { role } = req.body;
+  if (!['user', 'admin'].includes(role)) return res.status(400).json({ error: 'Ungültige Rolle' });
+  if (req.params.id === req.session.userId) return res.status(400).json({ error: 'Eigene Rolle kann nicht geändert werden' });
+  const result = db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'User nicht gefunden' });
+  res.json({ ok: true, role });
+});
+
 // ─── Admin: Reset password ────────────────────────────────────────────────
 
 router.put('/users/:id/password', requireAdmin, async (req, res) => {

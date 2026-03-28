@@ -67,7 +67,11 @@ async function loadUsers() {
               <td style="padding:10px 8px;font-size:14px">${escHtml(u.name)}</td>
               <td style="padding:10px 8px;font-size:13px;color:var(--text-muted)">${escHtml(u.email)}</td>
               <td style="padding:10px 8px">
-                <span class="tag" style="${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}">${escHtml(u.role)}</span>
+                ${u.id !== window.__currentUser?.id ? `
+                  <button class="btn btn-ghost btn-sm tag" style="font-size:11px;cursor:pointer;${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}" data-action="toggle-role" data-uid="${escHtml(u.id)}" data-role="${escHtml(u.role)}" title="Rolle ändern">
+                    ${escHtml(u.role)} ⇄
+                  </button>
+                ` : `<span class="tag" style="${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}">${escHtml(u.role)}</span>`}
               </td>
               <td style="padding:6px 8px;text-align:right;white-space:nowrap">
                 ${u.id !== window.__currentUser?.id ? `
@@ -81,6 +85,9 @@ async function loadUsers() {
       </table>
     `;
 
+    list.querySelectorAll('[data-action="toggle-role"]').forEach(btn => {
+      btn.addEventListener('click', () => toggleRole(btn.dataset.uid, btn.dataset.role));
+    });
     list.querySelectorAll('[data-action="delete"]').forEach(btn => {
       btn.addEventListener('click', () => deleteUser(btn.dataset.uid, btn.dataset.name));
     });
@@ -89,6 +96,19 @@ async function loadUsers() {
     });
   } catch (err) {
     list.innerHTML = `<p style="color:var(--danger)">${escHtml(err.message)}</p>`;
+  }
+}
+
+async function toggleRole(id, currentRole) {
+  const newRole = currentRole === 'admin' ? 'user' : 'admin';
+  const label = newRole === 'admin' ? 'zum Admin machen' : 'Admin-Rechte entziehen';
+  if (!confirm(`Benutzer ${label}?`)) return;
+  try {
+    await api.auth.users.changeRole(id, newRole);
+    toastSuccess(`Rolle auf "${newRole}" geändert`);
+    loadUsers();
+  } catch (err) {
+    toastError(err.message);
   }
 }
 
