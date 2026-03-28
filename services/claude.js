@@ -28,9 +28,10 @@ body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var
 
 #nexus-presentation {
   position: absolute;
+  top: 0; left: 0;
   width: 1280px; height: 720px;
   overflow: hidden;
-  transform-origin: center center;
+  transform-origin: top left;
 }
 
 /* High-specificity rules so Claude's generated CSS cannot override show/hide */
@@ -262,7 +263,7 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     if (e.data && e.data.type === 'nexus-prev') goto(current - 1);
   });
 
-  // Viewport scaling — always render at 1280×720, scale to fit available area
+  // Viewport scaling — render at 1280×720, scale to fit available area
   function scalePresentation() {
     var pres = document.getElementById('nexus-presentation');
     if (!pres) return;
@@ -271,13 +272,16 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     var availW = window.innerWidth;
     var availH = window.innerHeight - controlsH;
     var scale = Math.min(availW / 1280, availH / 720);
-    pres.style.left = (availW / 2) + 'px';
-    pres.style.top  = (availH / 2) + 'px';
-    pres.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+    var offsetX = (availW - 1280 * scale) / 2;
+    var offsetY = (availH - 720 * scale) / 2;
+    pres.style.transform = 'translate(' + offsetX + 'px, ' + offsetY + 'px) scale(' + scale + ')';
   }
   scalePresentation();
   window.addEventListener('resize', scalePresentation);
-  document.addEventListener('fullscreenchange', scalePresentation);
+  // Use rAF on fullscreenchange so dimensions are settled before recalculating
+  document.addEventListener('fullscreenchange', function() {
+    requestAnimationFrame(scalePresentation);
+  });
 
   // Init
   goto(0);
