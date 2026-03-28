@@ -28,7 +28,6 @@ body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var
 
 #nexus-presentation {
   position: absolute;
-  top: 50%; left: 50%;
   width: 1280px; height: 720px;
   overflow: hidden;
   transform-origin: center center;
@@ -263,13 +262,17 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     if (e.data && e.data.type === 'nexus-prev') goto(current - 1);
   });
 
-  // Viewport scaling — always render at 1280×720, scale to fit viewport
+  // Viewport scaling — always render at 1280×720, scale to fit available area
   function scalePresentation() {
     var pres = document.getElementById('nexus-presentation');
     if (!pres) return;
     var controls = document.getElementById('nexus-controls');
     var controlsH = controls ? controls.offsetHeight : 0;
-    var scale = Math.min(window.innerWidth / 1280, (window.innerHeight - controlsH) / 720);
+    var availW = window.innerWidth;
+    var availH = window.innerHeight - controlsH;
+    var scale = Math.min(availW / 1280, availH / 720);
+    pres.style.left = (availW / 2) + 'px';
+    pres.style.top  = (availH / 2) + 'px';
     pres.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
   }
   scalePresentation();
