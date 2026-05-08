@@ -299,8 +299,9 @@ router.get('/status', (req, res) => {
   const storedKey = providerPrefs.apiKey || '';
   const envKey = provider === 'anthropic' ? (process.env.ANTHROPIC_API_KEY || '') : '';
   const hasApiKey = !!(storedKey || envKey);
+  const usingEnvFallback = !storedKey && !!envKey;
 
-  res.json({ hasApiKey, provider, model });
+  res.json({ hasApiKey, provider, model, usingEnvFallback });
 });
 
 module.exports = router;

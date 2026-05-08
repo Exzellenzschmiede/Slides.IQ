@@ -14,8 +14,8 @@ const PROVIDERS = [
   {
     id: 'anthropic', label: 'Anthropic Claude', logo: '◈',
     models: [
-      { value: 'claude-opus-4-7',          label: 'Claude Opus 4.7 (stärkste)' },
-      { value: 'claude-sonnet-4-6',        label: 'Claude Sonnet 4.6 (empfohlen)' },
+      { value: 'claude-opus-4-7',           label: 'Claude Opus 4.7 (stärkste)' },
+      { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 (empfohlen)' },
       { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (schnell)' },
     ],
     keyPlaceholder: 'sk-ant-...',
@@ -24,11 +24,10 @@ const PROVIDERS = [
   {
     id: 'openai', label: 'OpenAI ChatGPT', logo: '⬡',
     models: [
-      { value: 'gpt-4o',        label: 'GPT-4o (empfohlen)' },
-      { value: 'gpt-4o-mini',   label: 'GPT-4o mini (schnell)' },
-      { value: 'gpt-4-turbo',   label: 'GPT-4 Turbo' },
-      { value: 'o1-preview',    label: 'o1 Preview' },
-      { value: 'o1-mini',       label: 'o1 mini' },
+      { value: 'gpt-5.5',      label: 'GPT-5.5 (aktuell, empfohlen)' },
+      { value: 'gpt-5.4',      label: 'GPT-5.4' },
+      { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (schnell)' },
+      { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (günstig)' },
     ],
     keyPlaceholder: 'sk-...',
     keyHint: 'platform.openai.com',
@@ -36,9 +35,10 @@ const PROVIDERS = [
   {
     id: 'mistral', label: 'Mistral Le Chat', logo: '🌊',
     models: [
-      { value: 'mistral-large-latest',  label: 'Mistral Large (stärkste)' },
-      { value: 'mistral-medium-latest', label: 'Mistral Medium' },
-      { value: 'mistral-small-latest',  label: 'Mistral Small (schnell)' },
+      { value: 'mistral-large-3',       label: 'Mistral Large 3 (stärkste)' },
+      { value: 'mistral-medium-3-5',    label: 'Mistral Medium 3.5' },
+      { value: 'mistral-small-2603',    label: 'Mistral Small 4 (schnell)' },
+      { value: 'magistral-medium-latest', label: 'Magistral Medium (Reasoning)' },
     ],
     keyPlaceholder: 'Dein Mistral API-Key',
     keyHint: 'console.mistral.ai',
@@ -46,10 +46,9 @@ const PROVIDERS = [
   {
     id: 'gemini', label: 'Google Gemini', logo: '✦',
     models: [
-      { value: 'gemini-2.0-flash',     label: 'Gemini 2.0 Flash (empfohlen)' },
-      { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash Exp' },
-      { value: 'gemini-1.5-pro',       label: 'Gemini 1.5 Pro' },
-      { value: 'gemini-1.5-flash',     label: 'Gemini 1.5 Flash' },
+      { value: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro (empfohlen)' },
+      { value: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash (schnell)' },
+      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (günstig)' },
     ],
     keyPlaceholder: 'AIza...',
     keyHint: 'aistudio.google.com',
@@ -80,6 +79,7 @@ function buildProviderSection(prefs) {
         </div>
         <div class="form-group">
           <label class="form-label">API-Key</label>
+          ${p.id === 'anthropic' ? '<div id="anthropic-env-notice" style="display:none;margin-bottom:8px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:8px;font-size:12px;color:#f59e0b">ℹ️ Kein Key gespeichert — es wird der <code>ANTHROPIC_API_KEY</code> aus der <code>.env</code>-Datei verwendet.</div>' : ''}
           <div class="password-wrapper">
             <input type="password" class="form-input" id="provider-key-${p.id}" value="${escHtml(apiKey)}" placeholder="${p.keyPlaceholder}" autocomplete="off">
             <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
@@ -361,6 +361,12 @@ export async function renderSettings(container) {
   container.querySelectorAll('input[name="pref-ai-provider"]').forEach(radio => {
     radio.addEventListener('change', scheduleSave);
   });
+
+  // Hide env-fallback notice when user starts typing an Anthropic key
+  document.getElementById('provider-key-anthropic')?.addEventListener('input', () => {
+    const notice = document.getElementById('anthropic-env-notice');
+    if (notice) notice.style.display = 'none';
+  });
   autoSaveIds.forEach(id => {
     document.getElementById(id)?.addEventListener('input', scheduleSave);
     document.getElementById(id)?.addEventListener('change', scheduleSave);
@@ -417,18 +423,7 @@ export async function renderSettings(container) {
   // ─── API status ───────────────────────────────────────────────────────────
 
   api.ai.status().then(status => {
-    const el = document.getElementById('api-key-status');
-    if (!el) return;
-    const dot = document.querySelector('.status-dot');
-    if (status.hasApiKey) {
-      el.innerHTML = `<span style="color:var(--success)">${t('settings.apiKeyFound')}</span> · Model: <code class="font-mono">${status.model}</code>`;
-      dot?.classList.add('online');
-    } else {
-      el.innerHTML = `<span style="color:var(--danger)">${t('settings.apiKeyMissing')}</span>`;
-      dot?.classList.add('error');
-    }
-  }).catch(() => {
-    const el = document.getElementById('api-key-status');
-    if (el) el.textContent = t('settings.apiKeyUnavailable');
-  });
+    const notice = document.getElementById('anthropic-env-notice');
+    if (notice && status.usingEnvFallback) notice.style.display = 'block';
+  }).catch(() => {});
 }

@@ -137,9 +137,9 @@ const defaultSettings = {
     aiProvider: 'anthropic',
     aiProviders: {
       anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
-      openai:    { apiKey: '', model: 'gpt-4o' },
-      mistral:   { apiKey: '', model: 'mistral-large-latest' },
-      gemini:    { apiKey: '', model: 'gemini-2.0-flash' }
+      openai:    { apiKey: '', model: 'gpt-5.5' },
+      mistral:   { apiKey: '', model: 'mistral-large-3' },
+      gemini:    { apiKey: '', model: 'gemini-2.5-pro' }
     }
   }
 };

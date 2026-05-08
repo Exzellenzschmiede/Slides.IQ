@@ -6,9 +6,9 @@ const Anthropic = require('@anthropic-ai/sdk');
 
 const DEFAULT_MODELS = {
   anthropic: 'claude-sonnet-4-6',
-  openai:    'gpt-4o',
-  mistral:   'mistral-large-latest',
-  gemini:    'gemini-2.0-flash',
+  openai:    'gpt-5.5',
+  mistral:   'mistral-large-3',
+  gemini:    'gemini-2.5-pro',
 };
 
 // ─── Helper: parse SSE stream from a fetch Response ──────────────────────────
