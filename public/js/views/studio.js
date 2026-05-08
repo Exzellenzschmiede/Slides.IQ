@@ -3,7 +3,7 @@
 import { api } from '../api.js';
 import { genManager } from '../generationManager.js';
 import { navigate } from '../router.js';
-import { showModal, closeModal } from '../components/modal.js';
+import { showModal, closeModal, showConfirmModal } from '../components/modal.js';
 import { toastSuccess, toastError, toastInfo } from '../components/toast.js';
 import { openSlideEditor } from './slideEditor.js';
 import { t, getCurrentLocale } from '../i18n.js';
@@ -380,18 +380,22 @@ async function duplicateSlide(index) {
   }
 }
 
-async function deleteSlide(index) {
+function deleteSlide(index) {
   if (isGenerating) return;
-  if (!confirm(t('studio.confirmDeleteSlide', { index: index + 1 }))) return;
-  try {
-    const result = await api.presentations.deleteSlide(currentPresentation.id, index);
-    currentPresentation.slide_count = result.slide_count;
-    const newIndex = Math.min(index, result.slide_count - 1);
-    await refreshAfterSlideOp(result.slide_count, newIndex);
-    toastSuccess(t('studio.slideDeleted', { index: index + 1 }));
-  } catch (err) {
-    toastError(t('common.error') + ': ' + err.message);
-  }
+  showConfirmModal(t('studio.confirmDeleteSlide', { index: index + 1 }), `Slide ${index + 1} wird unwiderruflich gelöscht.`, {
+    confirmLabel: 'Löschen', danger: true,
+    onConfirm: async () => {
+      try {
+        const result = await api.presentations.deleteSlide(currentPresentation.id, index);
+        currentPresentation.slide_count = result.slide_count;
+        const newIndex = Math.min(index, result.slide_count - 1);
+        await refreshAfterSlideOp(result.slide_count, newIndex);
+        toastSuccess(t('studio.slideDeleted', { index: index + 1 }));
+      } catch (err) {
+        toastError(t('common.error') + ': ' + err.message);
+      }
+    }
+  });
 }
 
 async function refreshAfterSlideOp(slideCount, gotoIndex = 0) {
@@ -671,9 +675,10 @@ function bindEvents() {
       if (!isOpen) dropdown.classList.add('open');
     });
   });
+  // Close dropdowns on outside click (bubble phase — stopPropagation in trigger prevents re-close)
   document.addEventListener('click', () => {
     document.querySelectorAll('.studio-dropdown.open').forEach(d => d.classList.remove('open'));
-  }, { capture: true });
+  });
 
   const chatInput = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
@@ -914,18 +919,22 @@ async function showVersions() {
     </div>
   `, t('studio.versionsSubtitle', { count: versions.length }));
 
-  window.restoreVersion = async (versionId) => {
-    if (!confirm(t('studio.restoreConfirm'))) return;
-    try {
-      await api.presentations.restoreVersion(currentPresentation.id, versionId);
-      currentPresentation = await api.presentations.get(currentPresentation.id);
-      closeModal();
-      loadPreview();
-      buildSlideNavigator();
-      toastSuccess(t('studio.versionRestored'));
-    } catch (err) {
-      toastError(t('common.error') + ': ' + err.message);
-    }
+  window.restoreVersion = (versionId) => {
+    showConfirmModal(t('studio.restoreConfirm'), 'Die aktuelle Version wird durch diese ersetzt.', {
+      confirmLabel: 'Wiederherstellen', danger: false,
+      onConfirm: async () => {
+        try {
+          await api.presentations.restoreVersion(currentPresentation.id, versionId);
+          currentPresentation = await api.presentations.get(currentPresentation.id);
+          closeModal();
+          loadPreview();
+          buildSlideNavigator();
+          toastSuccess(t('studio.versionRestored'));
+        } catch (err) {
+          toastError(t('common.error') + ': ' + err.message);
+        }
+      }
+    });
   };
 }
 

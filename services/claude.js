@@ -45,11 +45,11 @@ body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var
 /* High-specificity rules so Claude's generated CSS cannot override show/hide */
 #nexus-presentation .slide {
   position: absolute !important; inset: 0 !important;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: flex-start; justify-content: flex-start;
   opacity: 0 !important; pointer-events: none !important;
   transform: translateX(60px) scale(0.97) !important;
   transition: opacity 0.5s cubic-bezier(0.4,0,0.2,1), transform 0.5s cubic-bezier(0.4,0,0.2,1);
-  padding: 4rem; overflow: hidden;
+  padding: 4rem; overflow-y: auto; overflow-x: hidden;
 }
 #nexus-presentation .slide.active {
   opacity: 1 !important; pointer-events: all !important;
@@ -275,10 +275,13 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
   function scalePresentation() {
     var pres = document.getElementById('nexus-presentation');
     if (!pres) return;
-    var controls = document.getElementById('nexus-controls');
-    var controlsH = controls ? controls.offsetHeight : 0;
     var availW = window.innerWidth;
-    var availH = window.innerHeight - controlsH;
+    var availH = window.innerHeight;
+    // Reserve space for controls only when they are "always-visible" (presenter mode)
+    var controls = document.getElementById('nexus-controls');
+    if (controls && controls.classList.contains('always-visible')) {
+      availH -= controls.offsetHeight;
+    }
     var scale = Math.min(availW / 1280, availH / 720);
     var offsetX = (availW - 1280 * scale) / 2;
     var offsetY = (availH - 720 * scale) / 2;
@@ -287,9 +290,9 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
   scalePresentation();
   window.addEventListener('resize', scalePresentation);
   document.addEventListener('fullscreenchange', function () {
-    // fullscreenchange fires before the browser updates window.innerWidth/Height,
-    // so we defer until the new dimensions are stable
+    // Fire at 50ms and 250ms to catch both fast and slow browser layout updates
     setTimeout(scalePresentation, 50);
+    setTimeout(scalePresentation, 250);
   });
 
   // Init

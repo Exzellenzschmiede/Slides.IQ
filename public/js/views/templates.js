@@ -1,7 +1,7 @@
 // ─── Templates View ───────────────────────────────────────────────────────
 
 import { api } from '../api.js';
-import { showModal, closeModal } from '../components/modal.js';
+import { showModal, closeModal, showConfirmModal } from '../components/modal.js';
 import { toastSuccess, toastError } from '../components/toast.js';
 import { t } from '../i18n.js';
 
@@ -59,12 +59,16 @@ export async function renderTemplates(container) {
   container.querySelectorAll('.template-delete-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm(t('templates.confirmDelete'))) return;
-      try {
-        await api.templates.delete(btn.dataset.id);
-        toastSuccess(t('templates.deleted'));
-        renderTemplates(container);
-      } catch (err) { toastError(err.message); }
+      showConfirmModal(t('templates.confirmDelete'), 'Dieses Template wird unwiderruflich gelöscht.', {
+        confirmLabel: 'Löschen', danger: true,
+        onConfirm: async () => {
+          try {
+            await api.templates.delete(btn.dataset.id);
+            toastSuccess(t('templates.deleted'));
+            renderTemplates(container);
+          } catch (err) { toastError(err.message); }
+        }
+      });
     });
   });
 

@@ -2,7 +2,7 @@
 
 import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
-import { showModal, closeModal } from '../components/modal.js';
+import { showModal, closeModal, showConfirmModal } from '../components/modal.js';
 import { initPasswordToggles } from '../utils/passwordToggle.js';
 import { t } from '../i18n.js';
 
@@ -100,28 +100,32 @@ async function loadUsers() {
   }
 }
 
-async function toggleRole(id, currentRole) {
+function toggleRole(id, currentRole) {
   const newRole = currentRole === 'admin' ? 'user' : 'admin';
   const label = newRole === 'admin' ? t('admin.toggleRoleAdmin') : t('admin.toggleRoleUser');
-  if (!confirm(t('admin.confirmToggleRole', { label }))) return;
-  try {
-    await api.auth.users.changeRole(id, newRole);
-    toastSuccess(t('admin.roleChanged', { role: newRole }));
-    loadUsers();
-  } catch (err) {
-    toastError(err.message);
-  }
+  showConfirmModal(t('admin.confirmToggleRole', { label }), `Rolle wird zu "${label}" geändert.`, {
+    confirmLabel: 'Ändern',
+    onConfirm: async () => {
+      try {
+        await api.auth.users.changeRole(id, newRole);
+        toastSuccess(t('admin.roleChanged', { role: newRole }));
+        loadUsers();
+      } catch (err) { toastError(err.message); }
+    }
+  });
 }
 
-async function deleteUser(id, name) {
-  if (!confirm(t('admin.confirmDeleteUser', { name }))) return;
-  try {
-    await api.auth.users.delete(id);
-    toastSuccess(t('admin.userDeleted'));
-    loadUsers();
-  } catch (err) {
-    toastError(err.message);
-  }
+function deleteUser(id, name) {
+  showConfirmModal(t('admin.confirmDeleteUser', { name }), `Benutzer "${escHtml(name)}" wird unwiderruflich gelöscht.`, {
+    confirmLabel: 'Löschen', danger: true,
+    onConfirm: async () => {
+      try {
+        await api.auth.users.delete(id);
+        toastSuccess(t('admin.userDeleted'));
+        loadUsers();
+      } catch (err) { toastError(err.message); }
+    }
+  });
 }
 
 function showResetPasswordForm(id, name) {

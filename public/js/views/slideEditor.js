@@ -2,6 +2,7 @@
 
 import { api } from '../api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
+import { showConfirmModal } from '../components/modal.js';
 
 const state = {
   presentation: null,
@@ -347,10 +348,18 @@ function execCmd(cmd, value = null) {
 function bindEvents() {
   // Close
   document.getElementById('se-close')?.addEventListener('click', () => {
-    if (state.isDirty && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
-    const iframe = document.getElementById('se-iframe');
-    if (iframe?._blobUrl) URL.revokeObjectURL(iframe._blobUrl);
-    document.getElementById('slide-editor-overlay')?.remove();
+    const doClose = () => {
+      const iframe = document.getElementById('se-iframe');
+      if (iframe?._blobUrl) URL.revokeObjectURL(iframe._blobUrl);
+      document.getElementById('slide-editor-overlay')?.remove();
+    };
+    if (state.isDirty) {
+      showConfirmModal('Änderungen verwerfen?', 'Ungespeicherte Änderungen gehen verloren.', {
+        confirmLabel: 'Verwerfen', danger: true, onConfirm: doClose
+      });
+    } else {
+      doClose();
+    }
   });
 
   // Save

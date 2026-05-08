@@ -2,7 +2,7 @@
 
 import { api } from '../api.js';
 import { navigate } from '../router.js';
-import { showModal, closeModal } from '../components/modal.js';
+import { showModal, closeModal, showConfirmModal } from '../components/modal.js';
 import { toastSuccess, toastError, toastInfo } from '../components/toast.js';
 import { t, getCurrentLocale } from '../i18n.js';
 
@@ -215,14 +215,19 @@ window.nexusExportPdf = async (id, title) => {
   }
 };
 
-window.nexusDeletePresentation = async (id) => {
-  if (!confirm(t('dashboard.confirmDelete'))) return;
-  try {
-    await api.presentations.delete(id);
-    toastSuccess(t('dashboard.deleted'));
-    navigate('dashboard');
-    renderDashboard(document.getElementById('view-container'));
-  } catch (err) {
-    toastError(t('common.error') + ': ' + err.message);
-  }
+window.nexusDeletePresentation = (id) => {
+  showConfirmModal(t('dashboard.confirmDelete'), t('dashboard.confirmDeleteMsg', { defaultValue: 'Diese Präsentation wird unwiderruflich gelöscht.' }), {
+    confirmLabel: t('common.delete', { defaultValue: 'Löschen' }),
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await api.presentations.delete(id);
+        toastSuccess(t('dashboard.deleted'));
+        navigate('dashboard');
+        renderDashboard(document.getElementById('view-container'));
+      } catch (err) {
+        toastError(t('common.error') + ': ' + err.message);
+      }
+    }
+  });
 };
