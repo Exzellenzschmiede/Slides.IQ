@@ -1,16 +1,24 @@
 'use strict';
 
 const Anthropic = require('@anthropic-ai/sdk');
+const aiProvider = require('./aiProvider');
 
-let client = null;
+// Anthropic client for Haiku-based helper functions (always Anthropic-only)
+let _anthropicClient = null;
 
-function getClient() {
-  if (!client) {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+function getAnthropicClient(apiKey) {
+  const key = apiKey || process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+  // Re-use cached client only when using the env key
+  if (!apiKey) {
+    if (!_anthropicClient) _anthropicClient = new Anthropic({ apiKey: key });
+    return _anthropicClient;
   }
-  return client;
+  return new Anthropic({ apiKey: key });
 }
+
+// Keep getClient as alias for backward compat (used by analyzeNarrativeArc etc.)
+function getClient() { return getAnthropicClient(); }
 
 // ─── Core presentation generation system prompt ────────────────────────────
 
@@ -408,21 +416,30 @@ Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, k
 
 // ─── Generation with streaming ────────────────────────────────────────────
 
-async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-sonnet-4-6' }, onChunk) {
-  const anthropic = getClient();
+async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey }, onChunk) {
   const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, brand);
 
-  // Build content for the new user message
+  // Build content for the new user message.
+  // For Anthropic we support vision blocks; for other providers we fall back to text.
   let userContent;
   if (attachments.length > 0) {
+    const isAnthropic = provider === 'anthropic';
     const blocks = [];
 
-    // Image attachments → vision blocks
-    for (const att of attachments.filter(a => a.type === 'image')) {
-      blocks.push({
-        type: 'image',
-        source: { type: 'base64', media_type: att.mediaType, data: att.data },
-      });
+    if (isAnthropic) {
+      // Image attachments → vision blocks (Anthropic only)
+      for (const att of attachments.filter(a => a.type === 'image')) {
+        blocks.push({
+          type: 'image',
+          source: { type: 'base64', media_type: att.mediaType, data: att.data },
+        });
+      }
+    } else {
+      // Non-Anthropic: image attachments become placeholder text
+      const imageAtts = attachments.filter(a => a.type === 'image');
+      if (imageAtts.length > 0) {
+        blocks.push({ type: 'text', text: imageAtts.map(a => `[Bild-Anhang: ${a.name || 'Bild'}]`).join('\n') });
+      }
     }
 
     // Text attachments → prepend as context
@@ -445,28 +462,17 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
     { role: 'user', content: userContent }
   ];
 
-  let fullContent = '';
-  let stopReason = null;
+  // Resolve API key: use provided key, or fall back to env for Anthropic
+  const resolvedKey = apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined);
 
-  // Model-specific token limits
-  const maxTokens = model.includes('haiku') ? 8000 : 32000;
-
-  const stream = await anthropic.messages.stream({
+  const { text: fullContent, stopReason } = await aiProvider.streamGenerate({
+    provider,
+    apiKey: resolvedKey,
     model,
-    max_tokens: maxTokens,
-    system: sysPrompt,
-    messages
+    messages,
+    systemPrompt: sysPrompt,
+    onChunk,
   });
-
-  for await (const chunk of stream) {
-    if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-      fullContent += chunk.delta.text;
-      if (onChunk) onChunk(chunk.delta.text);
-    }
-    if (chunk.type === 'message_delta' && chunk.delta.stop_reason) {
-      stopReason = chunk.delta.stop_reason;
-    }
-  }
 
   // Inject the navigation framework (includes HTML repair)
   const finalHtml = injectFramework(fullContent);
@@ -687,9 +693,7 @@ Antworte ausschließlich als JSON (kein Markdown):
 
 // ─── Generate / edit a single slide ──────────────────────────────────────
 
-async function generateSingleSlide({ prompt, slideHtml = '', cssContext = '', surroundingSlides = [], model = 'claude-sonnet-4-6', mode = 'edit' }, onChunk) {
-  const anthropic = getClient();
-
+async function generateSingleSlide({ prompt, slideHtml = '', cssContext = '', surroundingSlides = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey, mode = 'edit' }, onChunk) {
   const cssSection = cssContext
     ? `\n\nVorhandenes CSS der Präsentation (Stil beibehalten):\n<css>\n${cssContext}\n</css>`
     : '';
@@ -713,25 +717,17 @@ REGELN:
     ? `Bestehende Slide:\n${slideHtml}\n\nAufgabe: ${prompt}\n\nGib die überarbeitete Slide zurück.`
     : `Erstelle eine neue Slide: ${prompt}\n\nGib die neue Slide zurück.`;
 
-  let fullContent = '';
-  let stopReason = null;
+  // Resolve API key: use provided key, or fall back to env for Anthropic
+  const resolvedKey = apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined);
 
-  const stream = await anthropic.messages.stream({
+  const { text: fullContent, stopReason } = await aiProvider.streamGenerate({
+    provider,
+    apiKey: resolvedKey,
     model,
-    max_tokens: 8000,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }]
+    messages: [{ role: 'user', content: userMessage }],
+    systemPrompt,
+    onChunk,
   });
-
-  for await (const chunk of stream) {
-    if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-      fullContent += chunk.delta.text;
-      if (onChunk) onChunk(chunk.delta.text);
-    }
-    if (chunk.type === 'message_delta' && chunk.delta.stop_reason) {
-      stopReason = chunk.delta.stop_reason;
-    }
-  }
 
   // Strip markdown fences if present
   const clean = fullContent.trim()

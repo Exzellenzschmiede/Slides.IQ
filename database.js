@@ -133,7 +133,14 @@ const defaultSettings = {
     font: 'Inter', style: 'modern', tagline: '', tone: 'professional'
   },
   preferences: {
-    defaultSlideCount: 10, language: 'en', mainModel: 'claude-sonnet-4-6'
+    defaultSlideCount: 10, language: 'en', mainModel: 'claude-sonnet-4-6',
+    aiProvider: 'anthropic',
+    aiProviders: {
+      anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
+      openai:    { apiKey: '', model: 'gpt-4o' },
+      mistral:   { apiKey: '', model: 'mistral-large-latest' },
+      gemini:    { apiKey: '', model: 'gemini-2.0-flash' }
+    }
   }
 };
 const seedSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value, user_id) VALUES (?, ?, '')");

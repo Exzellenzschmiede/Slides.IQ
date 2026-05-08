@@ -50,10 +50,13 @@ router.post('/generate/:presentationId', async (req, res) => {
   const brand = JSON.parse(row.brand || '{}');
   const conversation = JSON.parse(row.conversation || '[]');
 
-  // Read model from settings
+  // Read provider/model/apiKey from settings
   const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const model = prefs.mainModel || 'claude-sonnet-4-6';
+  const provider = prefs.aiProvider || 'anthropic';
+  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
+  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
+  const apiKey = providerPrefs.apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined) || undefined;
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -73,7 +76,7 @@ router.post('/generate/:presentationId', async (req, res) => {
     let streamedText = '';
 
     const { html: fullHtml, stopReason } = await generatePresentation(
-      { prompt, conversation, templateSystemPrompt, brand, attachments, model },
+      { prompt, conversation, templateSystemPrompt, brand, attachments, model, provider, apiKey },
       (chunk) => {
         streamedText += chunk;
         send({ type: 'chunk', text: chunk });
@@ -140,7 +143,10 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
 
   const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const model = prefs.mainModel || 'claude-sonnet-4-6';
+  const provider = prefs.aiProvider || 'anthropic';
+  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
+  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
+  const apiKey = providerPrefs.apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined) || undefined;
 
   const slides = parseSlidesFromHtml(row.html_content);
   if (slideIndex < 0 || slideIndex >= slides.length) return res.status(400).json({ error: 'Invalid slideIndex' });
@@ -162,7 +168,7 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
     send({ type: 'start' });
 
     const { slideHtml } = await generateSingleSlide(
-      { prompt, slideHtml: slides[slideIndex].html, cssContext, surroundingSlides, model, mode: 'edit' },
+      { prompt, slideHtml: slides[slideIndex].html, cssContext, surroundingSlides, model, provider, apiKey, mode: 'edit' },
       (chunk) => send({ type: 'chunk', text: chunk })
     );
 
@@ -200,7 +206,10 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
 
   const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const model = prefs.mainModel || 'claude-sonnet-4-6';
+  const provider = prefs.aiProvider || 'anthropic';
+  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
+  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
+  const apiKey = providerPrefs.apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined) || undefined;
 
   const slides = parseSlidesFromHtml(row.html_content);
   const cssContext = extractCssFromHtml(row.html_content);
@@ -220,7 +229,7 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
     send({ type: 'start' });
 
     const { slideHtml } = await generateSingleSlide(
-      { prompt, slideHtml: '', cssContext, surroundingSlides, model, mode: 'insert' },
+      { prompt, slideHtml: '', cssContext, surroundingSlides, model, provider, apiKey, mode: 'insert' },
       (chunk) => send({ type: 'chunk', text: chunk })
     );
 
@@ -276,15 +285,22 @@ router.post('/suggest/:presentationId', async (req, res) => {
   }
 });
 
-// ─── Check API key ────────────────────────────────────────────────────────
+// ─── Check API key / provider status ─────────────────────────────────────────
 
 router.get('/status', (req, res) => {
   const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  res.json({
-    hasApiKey: !!process.env.ANTHROPIC_API_KEY,
-    model: prefs.mainModel || 'claude-sonnet-4-6'
-  });
+
+  const provider = prefs.aiProvider || 'anthropic';
+  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
+  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
+
+  // Determine if there's a usable API key
+  const storedKey = providerPrefs.apiKey || '';
+  const envKey = provider === 'anthropic' ? (process.env.ANTHROPIC_API_KEY || '') : '';
+  const hasApiKey = !!(storedKey || envKey);
+
+  res.json({ hasApiKey, provider, model });
 });
 
 module.exports = router;
