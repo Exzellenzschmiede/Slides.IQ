@@ -8,6 +8,14 @@ const { parsePptxForTemplate } = require('../services/fileParser');
 const { analyzeTemplateFromPptx } = require('../services/claude');
 const { requireAdmin } = require('../middleware/auth');
 
+function getAnthropicKey(userId) {
+  const row =
+    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(userId) ||
+    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
+  const prefs = row ? JSON.parse(row.value) : {};
+  return prefs.aiProviders?.anthropic?.apiKey || '';
+}
+
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -138,9 +146,12 @@ router.post('/from-pptx', (req, res, next) => {
   if (!name.toLowerCase().endsWith('.pptx')) {
     return res.status(400).json({ error: 'Nur .pptx Dateien werden unterstützt' });
   }
+  const anthropicKey = getAnthropicKey(req.session.userId);
+  if (!anthropicKey) return res.status(400).json({ error: 'PPTX-Analyse erfordert einen Anthropic API-Key in den Einstellungen.' });
+
   try {
     const pptxData   = parsePptxForTemplate(req.file.buffer);
-    const suggestion = await analyzeTemplateFromPptx(pptxData);
+    const suggestion = await analyzeTemplateFromPptx(pptxData, anthropicKey);
     res.json(suggestion);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -14,6 +14,31 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB per file
 });
 
+// ─── Helper: read provider settings from DB (no env fallback) ─────────────────
+
+function getProviderSettings(userId) {
+  const settingsRow =
+    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(userId) ||
+    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
+  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
+  const provider = prefs.aiProvider || 'anthropic';
+  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
+  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
+  const apiKey = providerPrefs.apiKey || '';
+  return { provider, model, apiKey };
+}
+
+function getAnthropicKey(userId) {
+  const settingsRow =
+    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(userId) ||
+    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
+  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
+  return (prefs.aiProviders?.anthropic?.apiKey) || '';
+}
+
+const NO_KEY_MSG = (provider) =>
+  `Kein API-Key für ${provider} konfiguriert. Bitte hinterlege deinen API-Key in den Einstellungen.`;
+
 // ─── File upload + extraction ─────────────────────────────────────────────
 
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -40,6 +65,9 @@ router.post('/generate/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row) return res.status(404).json({ error: 'Presentation not found' });
 
+  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
+
   // Get template system prompt
   let templateSystemPrompt = null;
   if (row.template_id) {
@@ -49,14 +77,6 @@ router.post('/generate/:presentationId', async (req, res) => {
 
   const brand = JSON.parse(row.brand || '{}');
   const conversation = JSON.parse(row.conversation || '[]');
-
-  // Read provider/model/apiKey from settings
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
-  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const provider = prefs.aiProvider || 'anthropic';
-  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
-  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
-  const apiKey = providerPrefs.apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined) || undefined;
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -141,12 +161,8 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
 
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
-  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const provider = prefs.aiProvider || 'anthropic';
-  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
-  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
-  const apiKey = providerPrefs.apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined) || undefined;
+  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
   const slides = parseSlidesFromHtml(row.html_content);
   if (slideIndex < 0 || slideIndex >= slides.length) return res.status(400).json({ error: 'Invalid slideIndex' });
@@ -204,12 +220,8 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
 
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
-  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  const provider = prefs.aiProvider || 'anthropic';
-  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
-  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
-  const apiKey = providerPrefs.apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined) || undefined;
+  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
   const slides = parseSlidesFromHtml(row.html_content);
   const cssContext = extractCssFromHtml(row.html_content);
@@ -262,8 +274,11 @@ router.post('/analyze/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT html_content FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'No content' });
 
+  const anthropicKey = getAnthropicKey(req.session.userId);
+  if (!anthropicKey) return res.status(400).json({ error: 'Narrative-Analyse erfordert einen Anthropic API-Key in den Einstellungen.' });
+
   try {
-    const analysis = await analyzeNarrativeArc(row.html_content);
+    const analysis = await analyzeNarrativeArc(row.html_content, anthropicKey);
     res.json(analysis);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -277,8 +292,11 @@ router.post('/suggest/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT html_content FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'No content' });
 
+  const anthropicKey = getAnthropicKey(req.session.userId);
+  if (!anthropicKey) return res.status(400).json({ error: 'KI-Verbesserungsvorschläge erfordern einen Anthropic API-Key in den Einstellungen.' });
+
   try {
-    const suggestions = await suggestImprovements(row.html_content, focusArea);
+    const suggestions = await suggestImprovements(row.html_content, focusArea, anthropicKey);
     res.json(suggestions);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -288,20 +306,8 @@ router.post('/suggest/:presentationId', async (req, res) => {
 // ─── Check API key / provider status ─────────────────────────────────────────
 
 router.get('/status', (req, res) => {
-  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(req.session.userId) || db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
-  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-
-  const provider = prefs.aiProvider || 'anthropic';
-  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
-  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
-
-  // Determine if there's a usable API key
-  const storedKey = providerPrefs.apiKey || '';
-  const envKey = provider === 'anthropic' ? (process.env.ANTHROPIC_API_KEY || '') : '';
-  const hasApiKey = !!(storedKey || envKey);
-  const usingEnvFallback = !storedKey && !!envKey;
-
-  res.json({ hasApiKey, provider, model, usingEnvFallback });
+  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  res.json({ hasApiKey: !!apiKey, provider, model });
 });
 
 module.exports = router;

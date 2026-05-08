@@ -7,18 +7,9 @@ const aiProvider = require('./aiProvider');
 let _anthropicClient = null;
 
 function getAnthropicClient(apiKey) {
-  const key = apiKey || process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
-  // Re-use cached client only when using the env key
-  if (!apiKey) {
-    if (!_anthropicClient) _anthropicClient = new Anthropic({ apiKey: key });
-    return _anthropicClient;
-  }
-  return new Anthropic({ apiKey: key });
+  if (!apiKey) throw new Error('Kein Anthropic API-Key konfiguriert. Bitte hinterlege deinen API-Key in den Einstellungen.');
+  return new Anthropic({ apiKey });
 }
-
-// Keep getClient as alias for backward compat (used by analyzeNarrativeArc etc.)
-function getClient() { return getAnthropicClient(); }
 
 // ─── Core presentation generation system prompt ────────────────────────────
 
@@ -465,12 +456,9 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
     { role: 'user', content: userContent }
   ];
 
-  // Resolve API key: use provided key, or fall back to env for Anthropic
-  const resolvedKey = apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined);
-
   const { text: fullContent, stopReason } = await aiProvider.streamGenerate({
     provider,
-    apiKey: resolvedKey,
+    apiKey,
     model,
     messages,
     systemPrompt: sysPrompt,
@@ -559,8 +547,8 @@ module.exports.stripFramework = stripFramework;
 
 // ─── Narrative Arc Analysis ────────────────────────────────────────────────
 
-async function analyzeNarrativeArc(htmlContent) {
-  const anthropic = getClient();
+async function analyzeNarrativeArc(htmlContent, apiKey) {
+  const anthropic = getAnthropicClient(apiKey);
 
   // Extract slide content (strip HTML tags for analysis)
   const textContent = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 3000);
@@ -597,8 +585,8 @@ Antworte als JSON:
 
 // ─── Suggest improvements ────────────────────────────────────────────────
 
-async function suggestImprovements(htmlContent, focusArea) {
-  const anthropic = getClient();
+async function suggestImprovements(htmlContent, focusArea, apiKey) {
+  const anthropic = getAnthropicClient(apiKey);
   const textContent = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 2000);
 
   const response = await anthropic.messages.create({
@@ -628,8 +616,8 @@ const DEFAULT_SYSTEM_PROMPT = `Erstelle visuell beeindruckende Präsentationen m
 
 // ─── Analyze PPTX and generate template ──────────────────────────────────
 
-async function analyzeTemplateFromPptx({ textContent, themeColors, slideCount }) {
-  const anthropic = getClient();
+async function analyzeTemplateFromPptx({ textContent, themeColors, slideCount }, apiKey) {
+  const anthropic = getAnthropicClient(apiKey);
 
   const colorLines = Object.entries(themeColors)
     .filter(([k]) => !['majorFont', 'minorFont'].includes(k))
@@ -720,12 +708,9 @@ REGELN:
     ? `Bestehende Slide:\n${slideHtml}\n\nAufgabe: ${prompt}\n\nGib die überarbeitete Slide zurück.`
     : `Erstelle eine neue Slide: ${prompt}\n\nGib die neue Slide zurück.`;
 
-  // Resolve API key: use provided key, or fall back to env for Anthropic
-  const resolvedKey = apiKey || (provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : undefined);
-
   const { text: fullContent, stopReason } = await aiProvider.streamGenerate({
     provider,
-    apiKey: resolvedKey,
+    apiKey,
     model,
     messages: [{ role: 'user', content: userMessage }],
     systemPrompt,

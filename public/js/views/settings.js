@@ -79,7 +79,6 @@ function buildProviderSection(prefs) {
         </div>
         <div class="form-group">
           <label class="form-label">API-Key</label>
-          ${p.id === 'anthropic' ? '<div id="anthropic-env-notice" style="display:none;margin-bottom:8px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:8px;font-size:12px;color:#f59e0b">ℹ️ Kein Key gespeichert — es wird der <code>ANTHROPIC_API_KEY</code> aus der <code>.env</code>-Datei verwendet.</div>' : ''}
           <div class="password-wrapper">
             <input type="password" class="form-input" id="provider-key-${p.id}" value="${escHtml(apiKey)}" placeholder="${p.keyPlaceholder}" autocomplete="off">
             <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
@@ -362,11 +361,6 @@ export async function renderSettings(container) {
     radio.addEventListener('change', scheduleSave);
   });
 
-  // Hide env-fallback notice when user starts typing an Anthropic key
-  document.getElementById('provider-key-anthropic')?.addEventListener('input', () => {
-    const notice = document.getElementById('anthropic-env-notice');
-    if (notice) notice.style.display = 'none';
-  });
   autoSaveIds.forEach(id => {
     document.getElementById(id)?.addEventListener('input', scheduleSave);
     document.getElementById(id)?.addEventListener('change', scheduleSave);
@@ -420,10 +414,4 @@ export async function renderSettings(container) {
     }
   });
 
-  // ─── API status ───────────────────────────────────────────────────────────
-
-  api.ai.status().then(status => {
-    const notice = document.getElementById('anthropic-env-notice');
-    if (notice && status.usingEnvFallback) notice.style.display = 'block';
-  }).catch(() => {});
 }
