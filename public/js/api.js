@@ -22,11 +22,12 @@ async function apiFetch(path, options = {}) {
 
 // ─── Presentations ─────────────────────────────────────────────────────────
 
-async function* readSseStream(url, body) {
+async function* readSseStream(url, body, signal) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {
@@ -115,16 +116,16 @@ export const api = {
     },
 
     // Streaming generation - returns AsyncGenerator
-    generate: async function* (presentationId, prompt, attachments = []) {
-      yield* readSseStream(`${API_BASE}/ai/generate/${presentationId}`, { prompt, attachments });
+    generate: async function* (presentationId, prompt, attachments = [], signal) {
+      yield* readSseStream(`${API_BASE}/ai/generate/${presentationId}`, { prompt, attachments }, signal);
     },
 
-    editSlide: async function* (presentationId, slideIndex, prompt) {
-      yield* readSseStream(`${API_BASE}/ai/edit-slide/${presentationId}`, { slideIndex, prompt });
+    editSlide: async function* (presentationId, slideIndex, prompt, signal) {
+      yield* readSseStream(`${API_BASE}/ai/edit-slide/${presentationId}`, { slideIndex, prompt }, signal);
     },
 
-    insertSlide: async function* (presentationId, afterIndex, prompt) {
-      yield* readSseStream(`${API_BASE}/ai/insert-slide/${presentationId}`, { afterIndex, prompt });
+    insertSlide: async function* (presentationId, afterIndex, prompt, signal) {
+      yield* readSseStream(`${API_BASE}/ai/insert-slide/${presentationId}`, { afterIndex, prompt }, signal);
     }
   },
 

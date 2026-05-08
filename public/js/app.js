@@ -8,6 +8,7 @@ import { renderTemplates } from './views/templates.js';
 import { renderSettings } from './views/settings.js';
 import { renderAdmin } from './views/admin.js';
 import { api } from './api.js';
+import { genManager } from './generationManager.js'; // initialises the singleton
 import { initPasswordToggles } from './utils/passwordToggle.js';
 import { setLanguage, getCurrentLocale } from './i18n.js';
 

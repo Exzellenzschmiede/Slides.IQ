@@ -1,6 +1,7 @@
 // ─── AI Studio View ───────────────────────────────────────────────────────
 
 import { api } from '../api.js';
+import { genManager } from '../generationManager.js';
 import { navigate } from '../router.js';
 import { showModal, closeModal } from '../components/modal.js';
 import { toastSuccess, toastError, toastInfo } from '../components/toast.js';
@@ -18,6 +19,11 @@ let currentSlideIndex = 0;
 let slideScopedMode = false;
 let slideScopedIndex = -1;
 let messageListenerActive = false;
+
+// Generation manager event listeners (stored to allow removal on re-render)
+let _genProgressListener = null;
+let _genDoneListener = null;
+let _genErrorListener = null;
 
 function getQuickPrompts() {
   return t('studio.quickPrompts');
@@ -182,8 +188,16 @@ function initStudio() {
   loadModelLabel();
   loadPreview();
   bindEvents();
+  bindGenerationEvents();
   if (currentPresentation.html_content) {
     buildSlideNavigator();
+  }
+  // Re-attach to any generation that started before navigating away
+  const active = genManager.getActiveForPresentation(currentPresentation.id);
+  if (active.length > 0) {
+    isGenerating = true;
+    showStreamOverlay(active[0].label);
+    setGeneratingUI(true, active[0].label);
   }
 }
 
@@ -443,79 +457,45 @@ function showInsertSlideModal(afterIndex) {
 
 // ─── Streaming: edit or insert single slide ───────────────────────────────
 
-async function streamEditSlide(slideIndex, prompt) {
+function streamEditSlide(slideIndex, prompt) {
   if (isGenerating) return;
   isGenerating = true;
 
-  setGeneratingUI(true, t('studio.generatingSlide', { index: slideIndex + 1 }));
-  showStreamOverlay(t('studio.generatingSlide', { index: slideIndex + 1 }));
-
+  const label = t('studio.generatingSlide', { index: slideIndex + 1 });
+  setGeneratingUI(true, label);
+  showStreamOverlay(label);
   addChatMessage('user', `[Slide ${slideIndex + 1}] ${prompt}`);
 
-  try {
-    let charCount = 0;
-    for await (const event of api.ai.editSlide(currentPresentation.id, slideIndex, prompt)) {
-      if (event.type === 'chunk') {
-        charCount += event.text.length;
-        const charEl = document.getElementById('stream-chars');
-        if (charEl) charEl.textContent = t('studio.streamChars', { count: charCount.toLocaleString(getCurrentLocale()) });
-      } else if (event.type === 'done') {
-        currentPresentation.slide_count = event.slide_count;
-      } else if (event.type === 'error') {
-        throw new Error(event.message);
-      }
-    }
-
-    await refreshAfterSlideOp(currentPresentation.slide_count, slideIndex);
-    addChatMessage('assistant', t('studio.assistantSlideUpdated', { index: slideIndex + 1 }));
-    toastSuccess(t('studio.slideUpdated', { index: slideIndex + 1 }));
-  } catch (err) {
-    addChatMessage('assistant', t('studio.assistantError', { msg: err.message }));
-    toastError(err.message);
-  } finally {
-    isGenerating = false;
-    setGeneratingUI(false);
-    hideStreamOverlay();
-  }
+  genManager.start({
+    presentationId: currentPresentation.id,
+    title: currentPresentation.title,
+    label,
+    type: 'edit',
+    meta: { slideIndex },
+    apiCall: (signal) => api.ai.editSlide(currentPresentation.id, slideIndex, prompt, signal),
+  });
 }
 
-async function streamInsertSlide(afterIndex, prompt) {
+function streamInsertSlide(afterIndex, prompt) {
   if (isGenerating) return;
   isGenerating = true;
 
   const posLabel = afterIndex < 0
     ? t('studio.insertAtStart')
     : t('studio.insertAfter', { index: afterIndex + 1 });
-  setGeneratingUI(true, t('studio.generatingNew', { pos: posLabel }));
-  showStreamOverlay(t('studio.generatingNew', { pos: posLabel }));
-
+  const label = t('studio.generatingNew', { pos: posLabel });
+  setGeneratingUI(true, label);
+  showStreamOverlay(label);
   addChatMessage('user', `[${t('common.slides')} ${posLabel}] ${prompt}`);
 
-  try {
-    let charCount = 0;
-    for await (const event of api.ai.insertSlide(currentPresentation.id, afterIndex, prompt)) {
-      if (event.type === 'chunk') {
-        charCount += event.text.length;
-        const charEl = document.getElementById('stream-chars');
-        if (charEl) charEl.textContent = t('studio.streamChars', { count: charCount.toLocaleString(getCurrentLocale()) });
-      } else if (event.type === 'done') {
-        currentPresentation.slide_count = event.slide_count;
-        const newIndex = event.new_index ?? afterIndex + 1;
-        await refreshAfterSlideOp(currentPresentation.slide_count, newIndex);
-        addChatMessage('assistant', t('studio.assistantSlideInserted', { index: newIndex + 1, total: currentPresentation.slide_count }));
-        toastSuccess(t('studio.slideInserted'));
-      } else if (event.type === 'error') {
-        throw new Error(event.message);
-      }
-    }
-  } catch (err) {
-    addChatMessage('assistant', t('studio.assistantError', { msg: err.message }));
-    toastError(err.message);
-  } finally {
-    isGenerating = false;
-    setGeneratingUI(false);
-    hideStreamOverlay();
-  }
+  genManager.start({
+    presentationId: currentPresentation.id,
+    title: currentPresentation.title,
+    label,
+    type: 'insert',
+    meta: { afterIndex },
+    apiCall: (signal) => api.ai.insertSlide(currentPresentation.id, afterIndex, prompt, signal),
+  });
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────────
@@ -552,7 +532,7 @@ function hideStreamOverlay() {
 
 // ─── Main send (routes to full generation or slide-scoped edit) ───────────
 
-async function sendMessage() {
+function sendMessage() {
   if (isGenerating) return;
   const input = document.getElementById('chat-input');
   const prompt = input?.value.trim();
@@ -561,7 +541,7 @@ async function sendMessage() {
   // Route to slide-scoped edit if mode is active
   if (slideScopedMode && slideScopedIndex >= 0) {
     input.value = '';
-    await streamEditSlide(slideScopedIndex, prompt);
+    streamEditSlide(slideScopedIndex, prompt);
     return;
   }
 
@@ -572,85 +552,110 @@ async function sendMessage() {
   input.value = '';
   setGeneratingUI(true, t('studio.generating'));
 
-  // Add user message to chat
   const attachmentLabel = attachments.length
     ? `\n📎 ${attachments.map(a => a.name).join(', ')}`
     : '';
   addChatMessage('user', prompt + attachmentLabel);
-
   showStreamOverlay(t('studio.streamLabel'));
 
-  let charCount = 0;
+  genManager.start({
+    presentationId: currentPresentation.id,
+    title: currentPresentation.title,
+    label: t('studio.generating'),
+    type: 'generate',
+    meta: {},
+    apiCall: (signal) => api.ai.generate(currentPresentation.id, prompt, attachments, signal),
+  });
+}
 
-  try {
-    for await (const event of api.ai.generate(currentPresentation.id, prompt, attachments)) {
-      if (event.type === 'chunk') {
-        charCount += event.text.length;
-        const charEl = document.getElementById('stream-chars');
-        if (charEl) charEl.textContent = t('studio.streamChars', { count: charCount.toLocaleString(getCurrentLocale()) });
-      } else if (event.type === 'done') {
-        currentPresentation.slide_count = event.slide_count;
-      } else if (event.type === 'warning') {
-        toastError(event.message);
-      } else if (event.type === 'error') {
-        throw new Error(event.message);
-      }
-    }
+// ─── Generation manager event wiring ─────────────────────────────────────
 
-    // Update presentation
-    currentPresentation = await api.presentations.get(currentPresentation.id);
+function bindGenerationEvents() {
+  // Remove stale listeners from any previous studio mount
+  if (_genProgressListener) window.removeEventListener('genmanager:progress', _genProgressListener);
+  if (_genDoneListener)     window.removeEventListener('genmanager:done',     _genDoneListener);
+  if (_genErrorListener)    window.removeEventListener('genmanager:error',    _genErrorListener);
 
-    // Rebuild preview and navigator
-    const container = document.getElementById('preview-container');
-    if (container) {
-      container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
-        <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
-          <div class="loading-orb"></div>
-          <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
-          <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
-        </div>`;
-      loadPreview();
+  _genProgressListener = (e) => {
+    if (e.detail.presentationId !== currentPresentation?.id) return;
+    const charEl = document.getElementById('stream-chars');
+    if (charEl) charEl.textContent = t('studio.streamChars', {
+      count: e.detail.chars.toLocaleString(getCurrentLocale())
+    });
+  };
 
-      // Show suggest button if not present
-      const previewActions = document.querySelector('.preview-actions');
-      if (previewActions && !document.getElementById('btn-suggest')) {
-        previewActions.innerHTML += `<button class="btn btn-ghost btn-sm" id="btn-suggest">${t('studio.analyzeBtn')}</button>`;
-        document.getElementById('btn-suggest')?.addEventListener('click', loadSuggestions);
-      }
-    }
+  _genDoneListener = async (e) => {
+    if (e.detail.presentationId !== currentPresentation?.id) return;
+    const { type, meta, slideCount, newIndex } = e.detail;
 
-    // Add navigator if not present
-    if (!document.getElementById('slide-navigator')) {
-      const previewDiv = document.querySelector('.studio-preview');
-      if (previewDiv) {
-        const nav = document.createElement('div');
-        nav.className = 'slide-navigator';
-        nav.id = 'slide-navigator';
-        previewDiv.insertBefore(nav, previewDiv.querySelector('.preview-actions'));
-      }
-    }
-    buildSlideNavigator();
-
-    document.getElementById('studio-meta').textContent =
-      `${currentPresentation.slide_count} ${t('common.slides')} · ${t('studio.metaJustUpdated', { count: currentPresentation.slide_count })}`;
-
-    addChatMessage('assistant', t('studio.assistantCreated', { count: currentPresentation.slide_count }));
-    toastSuccess(t('studio.presentationGenerated'));
-
-    // Show present button if not visible
-    if (!document.getElementById('btn-present')) {
-      refreshStudioHeader();
-    }
-
-  } catch (err) {
-    addChatMessage('assistant', t('studio.assistantError', { msg: err.message }));
-    toastError(err.message);
-  } finally {
     isGenerating = false;
     setGeneratingUI(false);
     hideStreamOverlay();
-    input?.focus();
-  }
+
+    try {
+      currentPresentation = await api.presentations.get(currentPresentation.id);
+
+      if (type === 'generate') {
+        // Rebuild full preview + navigator
+        const container = document.getElementById('preview-container');
+        if (container) {
+          container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
+            <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
+              <div class="loading-orb"></div>
+              <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
+              <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
+            </div>`;
+          loadPreview();
+        }
+        if (!document.getElementById('slide-navigator')) {
+          const previewDiv = document.querySelector('.studio-preview');
+          if (previewDiv) {
+            const nav = document.createElement('div');
+            nav.className = 'slide-navigator';
+            nav.id = 'slide-navigator';
+            previewDiv.insertBefore(nav, previewDiv.querySelector('.preview-actions'));
+          }
+        }
+        buildSlideNavigator();
+        document.getElementById('studio-meta').textContent =
+          `${currentPresentation.slide_count} ${t('common.slides')} · ${t('studio.metaJustUpdated', { count: currentPresentation.slide_count })}`;
+        addChatMessage('assistant', t('studio.assistantCreated', { count: currentPresentation.slide_count }));
+        toastSuccess(t('studio.presentationGenerated'));
+        if (!document.getElementById('btn-present')) refreshStudioHeader();
+
+      } else if (type === 'edit') {
+        await refreshAfterSlideOp(currentPresentation.slide_count, meta.slideIndex);
+        addChatMessage('assistant', t('studio.assistantSlideUpdated', { index: meta.slideIndex + 1 }));
+        toastSuccess(t('studio.slideUpdated', { index: meta.slideIndex + 1 }));
+
+      } else if (type === 'insert') {
+        const idx = newIndex ?? meta.afterIndex + 1;
+        await refreshAfterSlideOp(currentPresentation.slide_count, idx);
+        addChatMessage('assistant', t('studio.assistantSlideInserted', { index: idx + 1, total: currentPresentation.slide_count }));
+        toastSuccess(t('studio.slideInserted'));
+      }
+    } catch (err) {
+      toastError(err.message);
+    }
+
+    document.getElementById('chat-input')?.focus();
+  };
+
+  _genErrorListener = (e) => {
+    if (e.detail.presentationId !== currentPresentation?.id) return;
+    isGenerating = false;
+    setGeneratingUI(false);
+    hideStreamOverlay();
+    if (e.detail.status !== 'cancelled') {
+      addChatMessage('assistant', t('studio.assistantError', { msg: e.detail.error || 'Fehler' }));
+      toastError(e.detail.error || 'Generierung fehlgeschlagen');
+    }
+    document.getElementById('chat-input')?.focus();
+  };
+
+  window.addEventListener('genmanager:progress', _genProgressListener);
+  window.addEventListener('genmanager:done',     _genDoneListener);
+  window.addEventListener('genmanager:error',    _genErrorListener);
 }
 
 // ─── Event binding ────────────────────────────────────────────────────────
