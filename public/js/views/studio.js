@@ -38,6 +38,7 @@ export async function renderStudio(container, { id }) {
     navigate('dashboard'); return;
   }
 
+  container.classList.add('studio-mode');
   container.innerHTML = buildStudioHTML(currentPresentation);
   initStudio();
 }
@@ -50,7 +51,8 @@ function buildStudioHTML(p) {
     .join('');
 
   return `
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+  <div class="studio-wrapper">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-shrink:0">
     <button class="studio-back-btn" onclick="window.history.back()" title="${t('studio.backTitle')}">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
@@ -170,6 +172,7 @@ function buildStudioHTML(p) {
       ` : ''}
 
     </div>
+  </div>
   </div>
   `;
 }

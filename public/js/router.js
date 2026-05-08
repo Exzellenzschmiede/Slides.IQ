@@ -34,6 +34,7 @@ export function initRouter(container) {
     });
 
     // Render view
+    container.classList.remove('studio-mode');
     const renderFn = routes[view] || routes['dashboard'];
     if (renderFn) {
       container.innerHTML = '<div class="loading-screen"><div class="loading-orb"></div></div>';

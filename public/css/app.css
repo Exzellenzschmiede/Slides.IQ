@@ -463,11 +463,28 @@ html, body {
 
 /* ─── Studio Layout ──────────────────────────────────────────────────── */
 
+#view-container.studio-mode {
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.studio-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 32px;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
 .studio-layout {
   display: grid;
   grid-template-columns: 360px 1fr;
   gap: 20px;
-  height: calc(100vh - 64px);
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── Studio Back Button ── */
@@ -1538,7 +1555,8 @@ html, body {
 /* ─── Responsive ──────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  #view-container { padding: 16px; }
+  #view-container:not(.studio-mode) { padding: 16px; }
+  .studio-wrapper { padding: 16px; }
   .studio-layout { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-section { grid-column: span 1; }
