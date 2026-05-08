@@ -74,14 +74,6 @@ export async function renderDashboard(container) {
       ${presentations.map(renderCard).join('')}
     </div>
 
-    ${presentations.length === 0 ? `
-      <div class="empty-state" style="margin-top:40px">
-        <div class="empty-state-icon">✦</div>
-        <div class="empty-state-title">${t('dashboard.emptyTitle')}</div>
-        <div class="empty-state-desc">${t('dashboard.emptyDesc')}</div>
-        <button class="btn btn-primary mt-16" id="first-btn">${t('dashboard.emptyBtn')}</button>
-      </div>
-    ` : ''}
   `;
 
   // Search
@@ -98,7 +90,6 @@ export async function renderDashboard(container) {
 
   document.getElementById('new-btn')?.addEventListener('click', () => showNewModal(templates));
   document.getElementById('new-card')?.addEventListener('click', () => showNewModal(templates));
-  document.getElementById('first-btn')?.addEventListener('click', () => showNewModal(templates));
 
   bindGridActions();
 }
