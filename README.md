@@ -18,22 +18,7 @@ Slides.IQ turns a text prompt into a fully styled, self-contained HTML presentat
 
 ---
 
-## Screenshots
-
-### Dashboard — My Slides
 ![Dashboard](docs/screenshots/01-dashboard.png)
-
-### Studio — AI Generation & Editing
-![Studio](docs/screenshots/02-studio.png)
-
-### Templates Gallery
-![Templates](docs/screenshots/03-templates.png)
-
-### Settings — Brand & Profile
-![Settings](docs/screenshots/04-settings.png)
-
-### Administration
-![Admin](docs/screenshots/05-admin.png)
 
 ---
 
