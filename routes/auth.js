@@ -41,6 +41,7 @@ router.post('/login', async (req, res) => {
 
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
   if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+  if (user.is_active === 0) return res.status(403).json({ error: 'Konto deaktiviert. Bitte wende dich an einen Administrator.' });
 
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
@@ -98,7 +99,7 @@ router.put('/me/password', requireAuth, async (req, res) => {
 // ─── Admin: User list ─────────────────────────────────────────────────────
 
 router.get('/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, email, name, role, created_at FROM users ORDER BY created_at ASC').all();
+  const users = db.prepare('SELECT id, email, name, role, is_active, created_at FROM users ORDER BY created_at ASC').all();
   res.json(users);
 });
 
@@ -117,6 +118,32 @@ router.post('/users', requireAdmin, async (req, res) => {
   const id = uuid();
   db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?)').run(id, email.toLowerCase().trim(), hash, name.trim(), role);
   res.status(201).json({ id, email: email.toLowerCase().trim(), name: name.trim(), role });
+});
+
+// ─── Admin: Edit user (name + email) ─────────────────────────────────────
+
+router.put('/users/:id', requireAdmin, async (req, res) => {
+  const { name, email, role } = req.body;
+  if (!name || !email) return res.status(400).json({ error: 'Name und E-Mail erforderlich' });
+  if (role && !['user', 'admin'].includes(role)) return res.status(400).json({ error: 'Ungültige Rolle' });
+  const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email.toLowerCase().trim(), req.params.id);
+  if (existing) return res.status(409).json({ error: 'E-Mail bereits vergeben' });
+  const updates = role
+    ? db.prepare('UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?').run(name.trim(), email.toLowerCase().trim(), role, req.params.id)
+    : db.prepare('UPDATE users SET name = ?, email = ? WHERE id = ?').run(name.trim(), email.toLowerCase().trim(), req.params.id);
+  if (updates.changes === 0) return res.status(404).json({ error: 'User nicht gefunden' });
+  res.json({ ok: true });
+});
+
+// ─── Admin: Toggle active ─────────────────────────────────────────────────
+
+router.put('/users/:id/active', requireAdmin, (req, res) => {
+  if (req.params.id === req.session.userId) return res.status(400).json({ error: 'Eigenen Account kann man nicht deaktivieren' });
+  const user = db.prepare('SELECT is_active FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
+  const newState = user.is_active === 0 ? 1 : 0;
+  db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newState, req.params.id);
+  res.json({ ok: true, is_active: newState });
 });
 
 // ─── Admin: Delete user ───────────────────────────────────────────────────

@@ -98,6 +98,7 @@ const migrations = [
   "ALTER TABLE settings ADD COLUMN user_id TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE templates ADD COLUMN owner_id TEXT REFERENCES users(id) ON DELETE SET NULL",
   "ALTER TABLE templates ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
 ];
 for (const sql of migrations) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
