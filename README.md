@@ -1,11 +1,12 @@
 ```
-  ____  _ _     _              ___ ___  
- / ___|| (_) __| | ___  ___  |_ _/ _ \
- \___ \| | |/ _` |/ -_|_-<  | || | | |
-  ___) | | | (_| |\___/__/  | || |_| |
- |____/|_|_|\__,_|          |___|\__\_\
-           AI Presentation Builder
+ ____  _       ___ ____  _____ ____       ___ ___  
+/ ___|| |     |_ _|  _ \| ____/ ___|     |_ _/ _ \
+\___ \| |      | || | | ||  _| \___ \  _  | || | | |
+ ___) || |___  | || |_| || |___ ___) |(_) | || |_| |
+|____/ |_____|___|____/ |_____|____/    |___|\__\_\
 ```
+
+> Open-source AI presentation builder — MIT licensed, self-hostable.
 
 **Stack:** Node.js · Express · SQLite · Vanilla JS SPA · WebSocket · Multi-Provider AI
 
@@ -132,4 +133,4 @@ Additional references:
 
 ## License
 
-MIT
+Slides.IQ is open source and released under the **MIT License**. You are free to use, modify, and distribute it — including for commercial purposes. Contributions are welcome.
