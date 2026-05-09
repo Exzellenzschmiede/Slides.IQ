@@ -134,6 +134,13 @@ export const api = {
     update: (data) => apiFetch('/settings', { method: 'PUT', body: data })
   },
 
+  admin: {
+    aiSettings: {
+      get: () => apiFetch('/admin/ai-settings'),
+      update: (data) => apiFetch('/admin/ai-settings', { method: 'PUT', body: data })
+    }
+  },
+
   auth: {
     setupNeeded: () => apiFetch('/auth/setup-needed'),
     setup: (data) => apiFetch('/auth/setup', { method: 'POST', body: data }),

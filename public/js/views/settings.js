@@ -10,108 +10,6 @@ function escHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const PROVIDERS = [
-  {
-    id: 'anthropic', label: 'Anthropic Claude', logo: '◈',
-    models: [
-      { value: 'claude-opus-4-7',           label: 'Claude Opus 4.7 (stärkste)' },
-      { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 (empfohlen)' },
-      { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (schnell)' },
-    ],
-    keyPlaceholder: 'sk-ant-...',
-    keyHint: 'console.anthropic.com',
-  },
-  {
-    id: 'openai', label: 'OpenAI ChatGPT', logo: '⬡',
-    models: [
-      { value: 'gpt-5.5',      label: 'GPT-5.5 (aktuell, empfohlen)' },
-      { value: 'gpt-5.4',      label: 'GPT-5.4' },
-      { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (schnell)' },
-      { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (günstig)' },
-    ],
-    keyPlaceholder: 'sk-...',
-    keyHint: 'platform.openai.com',
-  },
-  {
-    id: 'mistral', label: 'Mistral Le Chat', logo: '🌊',
-    models: [
-      { value: 'mistral-large-3',       label: 'Mistral Large 3 (stärkste)' },
-      { value: 'mistral-medium-3-5',    label: 'Mistral Medium 3.5' },
-      { value: 'mistral-small-2603',    label: 'Mistral Small 4 (schnell)' },
-      { value: 'magistral-medium-latest', label: 'Magistral Medium (Reasoning)' },
-    ],
-    keyPlaceholder: 'Dein Mistral API-Key',
-    keyHint: 'console.mistral.ai',
-  },
-  {
-    id: 'gemini', label: 'Google Gemini', logo: '✦',
-    models: [
-      { value: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro (empfohlen)' },
-      { value: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash (schnell)' },
-      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (günstig)' },
-    ],
-    keyPlaceholder: 'AIza...',
-    keyHint: 'aistudio.google.com',
-  },
-];
-
-function buildProviderSection(prefs) {
-  const activeProvider = prefs.aiProvider || 'anthropic';
-  const aiProviders = prefs.aiProviders || {};
-
-  const tabs = PROVIDERS.map(p => `
-    <button class="provider-tab${p.id === activeProvider ? ' active' : ''}" data-provider="${p.id}">
-      <span class="provider-tab-logo">${p.logo}</span> ${p.label}
-    </button>`).join('');
-
-  const panels = PROVIDERS.map(p => {
-    const cfg = aiProviders[p.id] || {};
-    const selectedModel = cfg.model || p.models[0].value;
-    const apiKey = cfg.apiKey || '';
-    return `
-      <div id="provider-panel-${p.id}" class="provider-panel${p.id !== activeProvider ? ' hidden' : ''}">
-        <div class="form-group" style="margin-top:16px">
-          <label class="form-label">Aktiver Anbieter</label>
-          <div style="display:flex;align-items:center;gap:10px">
-            <input type="radio" name="pref-ai-provider" id="pref-ai-provider-${p.id}" value="${p.id}" ${p.id === activeProvider ? 'checked' : ''} style="accent-color:var(--primary)">
-            <label for="pref-ai-provider-${p.id}" style="font-size:13px;cursor:pointer">${p.logo} ${p.label} als aktiven Anbieter verwenden</label>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">API-Key</label>
-          <div class="password-wrapper">
-            <input type="password" class="form-input" id="provider-key-${p.id}" value="${escHtml(apiKey)}" placeholder="${p.keyPlaceholder}" autocomplete="off">
-            <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="text-xs text-muted" style="margin-top:5px">Key abrufen: ${p.keyHint}</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Modell</label>
-          <select class="form-select" id="provider-model-${p.id}">
-            ${p.models.map(m => `<option value="${m.value}" ${selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
-          </select>
-        </div>
-      </div>`;
-  }).join('');
-
-  return `
-    <div class="provider-tabs">${tabs}</div>
-    ${panels}
-  `;
-}
-
-function readProviderSettings() {
-  const result = {};
-  for (const p of PROVIDERS) {
-    result[p.id] = {
-      apiKey: document.getElementById(`provider-key-${p.id}`)?.value || '',
-      model: document.getElementById(`provider-model-${p.id}`)?.value || p.models[0].value,
-    };
-  }
-  return result;
-}
 
 export async function renderSettings(container) {
   let settings = {};
@@ -129,15 +27,6 @@ export async function renderSettings(container) {
     </div>
 
     <div class="settings-grid">
-
-      <!-- AI Provider -->
-      <div class="settings-section">
-        <div class="settings-section-title">KI-Anbieter</div>
-        <div class="settings-section-desc">Wähle Anbieter, API-Key und Modell</div>
-      </div>
-      <div class="card" style="grid-column:span 2">
-        ${buildProviderSection(prefs)}
-      </div>
 
       <!-- Brand Identity -->
       <div class="settings-section">
@@ -308,9 +197,6 @@ export async function renderSettings(container) {
           },
           preferences: {
             language: newLang,
-            mainModel: document.getElementById('pref-model')?.value || 'claude-sonnet-4-6',
-            aiProvider: document.querySelector('input[name="pref-ai-provider"]:checked')?.value || 'anthropic',
-            aiProviders: readProviderSettings()
           }
         }),
         api.auth.updateProfile({
@@ -335,31 +221,12 @@ export async function renderSettings(container) {
     saveTimer = setTimeout(saveAll, 800);
   }
 
-  // Wire provider tabs
-  document.querySelectorAll('.provider-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.provider-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.provider-panel').forEach(p => p.classList.add('hidden'));
-      tab.classList.add('active');
-      document.getElementById('provider-panel-' + tab.dataset.provider)?.classList.remove('hidden');
-    });
-  });
-
   // Wire up all auto-save inputs (everything except password fields)
   const autoSaveIds = [
     'brand-name', 'brand-primary-text', 'brand-accent-text',
     'brand-font', 'brand-style', 'brand-tagline', 'brand-tone',
     'profile-name', 'profile-email', 'pref-lang',
-    'provider-model-anthropic', 'provider-key-anthropic',
-    'provider-model-openai', 'provider-key-openai',
-    'provider-model-mistral', 'provider-key-mistral',
-    'provider-model-gemini', 'provider-key-gemini',
   ];
-
-  // Wire radio buttons for active provider
-  container.querySelectorAll('input[name="pref-ai-provider"]').forEach(radio => {
-    radio.addEventListener('change', scheduleSave);
-  });
 
   autoSaveIds.forEach(id => {
     document.getElementById(id)?.addEventListener('input', scheduleSave);

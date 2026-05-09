@@ -114,6 +114,29 @@ app.put('/api/settings', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Admin: Global AI settings ────────────────────────────────────────────
+
+app.get('/api/admin/ai-settings', requireAdmin, (req, res) => {
+  const db = require('./database');
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
+  const prefs = row ? JSON.parse(row.value) : {};
+  res.json({
+    aiProvider: prefs.aiProvider || 'anthropic',
+    aiProviders: prefs.aiProviders || {}
+  });
+});
+
+app.put('/api/admin/ai-settings', requireAdmin, (req, res) => {
+  const db = require('./database');
+  const { aiProvider, aiProviders } = req.body;
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
+  const prefs = row ? JSON.parse(row.value) : {};
+  prefs.aiProvider = aiProvider || prefs.aiProvider || 'anthropic';
+  if (aiProviders) prefs.aiProviders = aiProviders;
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, user_id) VALUES ('preferences', ?, '')").run(JSON.stringify(prefs));
+  res.json({ ok: true });
+});
+
 // ─── Admin: Framework migration ───────────────────────────────────────────
 
 app.post('/api/admin/migrate-frameworks', requireAdmin, (req, res) => {

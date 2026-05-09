@@ -16,11 +16,13 @@ const upload = multer({
 
 // ─── Helper: read provider settings from DB (no env fallback) ─────────────────
 
-function getProviderSettings(userId) {
-  const settingsRow =
-    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(userId) ||
-    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
-  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
+function getGlobalPrefs() {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
+  return row ? JSON.parse(row.value) : {};
+}
+
+function getProviderSettings() {
+  const prefs = getGlobalPrefs();
   const provider = prefs.aiProvider || 'anthropic';
   const providerPrefs = (prefs.aiProviders || {})[provider] || {};
   const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
@@ -28,12 +30,9 @@ function getProviderSettings(userId) {
   return { provider, model, apiKey };
 }
 
-function getAnthropicKey(userId) {
-  const settingsRow =
-    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(userId) ||
-    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
-  const prefs = settingsRow ? JSON.parse(settingsRow.value) : {};
-  return (prefs.aiProviders?.anthropic?.apiKey) || '';
+function getAnthropicKey() {
+  const prefs = getGlobalPrefs();
+  return prefs.aiProviders?.anthropic?.apiKey || '';
 }
 
 const NO_KEY_MSG = (provider) =>
@@ -65,7 +64,7 @@ router.post('/generate/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row) return res.status(404).json({ error: 'Presentation not found' });
 
-  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  const { provider, model, apiKey } = getProviderSettings();
   if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
   // Get template system prompt
@@ -161,7 +160,7 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
 
-  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  const { provider, model, apiKey } = getProviderSettings();
   if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
   const slides = parseSlidesFromHtml(row.html_content);
@@ -220,7 +219,7 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'Not found' });
 
-  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  const { provider, model, apiKey } = getProviderSettings();
   if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
   const slides = parseSlidesFromHtml(row.html_content);
@@ -274,7 +273,7 @@ router.post('/analyze/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT html_content FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'No content' });
 
-  const anthropicKey = getAnthropicKey(req.session.userId);
+  const anthropicKey = getAnthropicKey();
   if (!anthropicKey) return res.status(400).json({ error: 'Narrative-Analyse erfordert einen Anthropic API-Key in den Einstellungen.' });
 
   try {
@@ -292,7 +291,7 @@ router.post('/suggest/:presentationId', async (req, res) => {
   const row = db.prepare('SELECT html_content FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'No content' });
 
-  const anthropicKey = getAnthropicKey(req.session.userId);
+  const anthropicKey = getAnthropicKey();
   if (!anthropicKey) return res.status(400).json({ error: 'KI-Verbesserungsvorschläge erfordern einen Anthropic API-Key in den Einstellungen.' });
 
   try {
@@ -306,7 +305,7 @@ router.post('/suggest/:presentationId', async (req, res) => {
 // ─── Check API key / provider status ─────────────────────────────────────────
 
 router.get('/status', (req, res) => {
-  const { provider, model, apiKey } = getProviderSettings(req.session.userId);
+  const { provider, model, apiKey } = getProviderSettings();
   res.json({ hasApiKey: !!apiKey, provider, model });
 });
 
