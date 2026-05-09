@@ -272,7 +272,7 @@ const LOCALES = {
     },
     admin: {
       title: 'Administration',
-      subtitle: 'Manage users and assign access rights',
+      subtitle: 'System settings',
       addUserBtn: '+ Add user',
       loadingUsers: 'Loading…',
       noUsers: 'No users found.',
@@ -586,7 +586,7 @@ const LOCALES = {
     },
     admin: {
       title: 'Administration',
-      subtitle: 'Benutzer verwalten und Zugriffsrechte vergeben',
+      subtitle: 'Systemeinstellungen',
       addUserBtn: '+ Benutzer hinzufügen',
       loadingUsers: 'Wird geladen…',
       noUsers: 'Keine Benutzer vorhanden.',
@@ -900,7 +900,7 @@ const LOCALES = {
     },
     admin: {
       title: 'Amministrazione',
-      subtitle: 'Gestisci utenti e assegna diritti di accesso',
+      subtitle: 'Impostazioni di sistema',
       addUserBtn: '+ Aggiungi utente',
       loadingUsers: 'Caricamento…',
       noUsers: 'Nessun utente trovato.',
@@ -1214,7 +1214,7 @@ const LOCALES = {
     },
     admin: {
       title: 'Beheer',
-      subtitle: 'Gebruikers beheren en toegangsrechten toewijzen',
+      subtitle: 'Systeeminstellingen',
       addUserBtn: '+ Gebruiker toevoegen',
       loadingUsers: 'Laden…',
       noUsers: 'Geen gebruikers gevonden.',
@@ -1528,7 +1528,7 @@ const LOCALES = {
     },
     admin: {
       title: 'Administracja',
-      subtitle: 'Zarządzaj użytkownikami i przypisuj prawa dostępu',
+      subtitle: 'Ustawienia systemowe',
       addUserBtn: '+ Dodaj użytkownika',
       loadingUsers: 'Ładowanie…',
       noUsers: 'Brak użytkowników.',

@@ -119,7 +119,6 @@ export async function renderAdmin(container) {
     <div class="settings-grid" style="max-width:900px;margin-bottom:32px">
       <div class="settings-section">
         <div class="settings-section-title">KI-Anbieter</div>
-        <div class="settings-section-desc" style="font-size:13px;color:var(--text-muted);margin-top:4px">Gilt für alle Benutzer</div>
       </div>
       <div class="card" style="grid-column:span 2" id="ai-settings-card">
         <div class="text-muted text-sm">Lade…</div>
@@ -129,7 +128,6 @@ export async function renderAdmin(container) {
     <div class="settings-grid" style="max-width:900px">
       <div class="settings-section">
         <div class="settings-section-title">Benutzerverwaltung</div>
-        <div class="settings-section-desc" style="font-size:13px;color:var(--text-muted);margin-top:4px">Zugänge verwalten</div>
       </div>
       <div class="card" style="grid-column:span 2">
         <div id="user-list" class="text-muted text-sm">${t('admin.loadingUsers')}</div>
