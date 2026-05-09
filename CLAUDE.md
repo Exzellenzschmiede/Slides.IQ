@@ -10,7 +10,7 @@ npm start            # production server (node server.js)
 npm run dev          # development server with hot-reload (node --watch server.js)
 ```
 
-Required env var: `ANTHROPIC_API_KEY`. Copy `.env.example` to `.env`.
+No `.env` file required. AI API keys are configured in the Admin panel (stored in the DB). The only relevant env vars are `PORT`, `SESSION_SECRET`, `BASE_URL`, `DB_PATH` — all optional for local dev.
 
 No test suite or linter is configured.
 
@@ -20,36 +20,47 @@ No test suite or linter is configured.
 
 ### Backend
 
-- `server.js` — Express app + WebSocket server. Mounts three routers, serves `public/` as static files, handles the public `/view/:token` presentation endpoint and SPA fallback.
-- `database.js` — Opens the SQLite DB, runs `CREATE TABLE IF NOT EXISTS` on startup, applies additive `ALTER TABLE` migrations by catching duplicate-column errors, and seeds 5 default templates if the table is empty.
-- `routes/ai.js` — All AI endpoints under `/api/ai` (rate-limited to 10 req/min). Generation streams HTML back via Server-Sent Events.
-- `routes/presentations.js` — CRUD + versioning + export (PDF via Puppeteer, HTML download, share token/QR).
-- `routes/templates.js` — CRUD + `POST /from-pptx` (multer → parse PPTX → Claude Haiku → return template suggestion without saving).
-- `services/claude.js` — Claude API client. `generatePresentation()` streams with `claude-opus-4-5` (16k tokens). `analyzeNarrativeArc()` and `suggestImprovements()` use `claude-haiku-4-5-20251001`. `analyzeTemplateFromPptx()` also uses Haiku. Contains the full `PRESENTATION_FRAMEWORK` constant (CSS + JS engine injected into every HTML output). `injectFramework()` / `stripFramework()` keep the engine in sync on updates.
+- `server.js` — Express app + WebSocket server. Mounts five routers, serves `public/` as static files, handles the public `/view/:token` endpoint and SPA fallback. Runs `migrateAllFrameworks()` on startup.
+- `database.js` — Opens the SQLite DB, runs `CREATE TABLE IF NOT EXISTS` on startup, applies additive `ALTER TABLE` migrations by catching duplicate-column errors, seeds 5 default templates and global default settings if absent. Settings use a composite `(key, user_id)` primary key.
+- `routes/auth.js` — Login/logout, profile update, password change. Admin sub-routes: list/create/update/delete users, toggle active, change role, reset password.
+- `routes/ai.js` — All AI endpoints under `/api/ai` (rate-limited to 10 req/min). Reads the active provider + API key from admin settings via `services/aiProvider.js` — **never from env**. Returns 400 JSON before SSE headers if no key is configured.
+- `routes/presentations.js` — CRUD + versioning (inline JSON array, max 20) + per-user shares + public token sharing + export (PDF via Puppeteer, HTML download).
+- `routes/templates.js` — CRUD + `POST /from-pptx` (multer → parse PPTX → AI → return template suggestion without saving).
+- `routes/admin.js` — `GET/PUT /api/admin/ai-settings` — global AI provider config (admin only).
+- `services/aiProvider.js` — Resolves the active provider, API key, and model from the `preferences` settings row. Exports `getGlobalPrefs()`, `getProviderSettings()`, `DEFAULT_MODELS`.
+- `services/claude.js` — Multi-provider AI client. `generatePresentation()` dispatches to Anthropic/OpenAI/Mistral/Gemini based on `provider` param. `analyzeNarrativeArc()` and `suggestImprovements()` are Anthropic-only. Contains the full `PRESENTATION_FRAMEWORK` constant (CSS + JS engine injected into every HTML output). `injectFramework()` / `stripFramework()` keep the engine in sync on updates.
 - `services/fileParser.js` — `parseFile()` dispatches by extension/mime to text, image (base64), CSV, Excel (ExcelJS), Word (Mammoth), PDF (pdf-parse), or PPTX (adm-zip). `parsePptxForTemplate()` additionally extracts theme colors and fonts from `ppt/theme/theme1.xml`.
 - `services/pdf.js` — Puppeteer renders each slide at 1280×720 and assembles a multi-page PDF.
+- `services/slideUtils.js` — Utility functions for HTML slide manipulation: count, extract, replace, insert, delete by index.
 
 ### Frontend
 
 Single-page app in `public/`. All JS is ES modules imported via `<script type="module">`.
 
-- `public/js/app.js` — Bootstrap: initialises router, modal, toast, loads settings.
-- `public/js/router.js` — Hash-based SPA router. Renders views into `#view-container`.
-- `public/js/api.js` — Centralised fetch wrapper (`apiFetch`). Exports `api` object with namespaced methods. Streaming generation is an `async function*` that reads SSE chunks.
-- `public/js/views/studio.js` — Largest file (~27 KB). The main editing UI: chat sidebar, file attachment chips, SSE streaming display, preview `<iframe>`, version history, narrative arc analysis, AI suggestions, PDF/HTML export, presenter mode (WebSocket).
+- `public/js/app.js` — Bootstrap: checks setup-needed, auth, initialises router + modal + toast, loads settings.
+- `public/js/router.js` — Hash-based SPA router (`#/dashboard`, `#/studio/:id`, etc.). Renders views into `#view-container`.
+- `public/js/api.js` — Centralised fetch wrapper (`apiFetch`). Exports `api` object with namespaced methods. Streaming generation is an `async function*` (`readSseStream`) that reads SSE chunks.
+- `public/js/i18n.js` — All UI strings for 5 locales (en/de/it/nl/pl). Use `t('key')` to access.
+- `public/js/views/studio.js` — Main editing UI: chat sidebar, file attachment chips, SSE streaming display, preview `<iframe>`, version history, narrative arc analysis, AI suggestions, PDF/HTML export, presenter mode (WebSocket).
+- `public/js/views/admin.js` — Admin-only view: global AI provider tabs (Anthropic/OpenAI/Mistral/Gemini) with API key + model config, and full user management table (create, edit, toggle active, change role, reset password with auto-generate).
+- `public/js/views/settings.js` — Per-user brand settings, profile (name/email), password change, language — all auto-saved with 800 ms debounce.
 - `public/js/views/templates.js` — Template gallery + create/edit modals + PPTX import flow.
-- `public/js/components/modal.js` — Single shared modal: `showModal(title, content, subtitle)` replaces `#modal-body` innerHTML entirely.
+- `public/js/components/modal.js` — Single shared modal: `showModal(title, content)`, `closeModal()`, `showConfirmModal()`. Cancel buttons use `closeModal()` via event listeners (not inline onclick).
 
 ### Key data flows
 
 **Presentation generation:**
 1. Studio sends `POST /api/ai/generate/:id` with `{prompt, attachments[]}`.
-2. Server builds a Claude messages array from `conversation` history (last 20) + new user message (text + optional vision/document blocks).
-3. Claude streams HTML; chunks are forwarded as SSE `{type:'chunk', text}`.
-4. On completion: framework is injected/updated, slide count computed, version saved, conversation appended.
+2. Server resolves provider + API key from admin settings. Returns 400 JSON if missing.
+3. Builds messages array from `conversation` history (last 20) + new user message with optional vision/document blocks.
+4. Opens SSE stream to the AI provider; chunks forwarded as `{type:'chunk', text}`.
+5. On completion: `injectFramework()`, slide count update, version snapshot saved to inline JSON array, conversation appended, presentation persisted.
 
 **HTML presentation format:**
-Every stored presentation is a self-contained HTML file. The `PRESENTATION_FRAMEWORK` block (marked with `<!-- SLIDESIQ:FRAMEWORK:START/END -->`) contains all navigation CSS and JS and is always injected before `</body>`. Claude generates only the slides — `<div id="nexus-presentation">` containing `<div class="slide">` children. The framework script reads these at runtime.
+Every stored presentation is a self-contained HTML file. The `PRESENTATION_FRAMEWORK` block (marked with `<!-- SLIDESIQ:FRAMEWORK:START/END -->`) contains all navigation CSS and JS and is always injected before `</body>`. The AI generates only the slides — `<div id="nexus-presentation">` containing `<div class="slide">` children. Slides are scaled via `ResizeObserver` using `transform: scale()` on a 1280×720 canvas.
 
 **Template system:**
-Templates provide a `system_prompt` (style instructions for Claude) and a `theme` JSON object `{primaryColor, accentColor, bgColor, style, font}`. The system prompt is prepended to the core generation instructions in `buildSystemPrompt()`. Default templates (ids prefixed `tpl-`) cannot be deleted from the UI.
+Templates provide a `system_prompt` (style instructions) and a `theme` JSON `{primaryColor, accentColor, bgColor, style, font}`. The system prompt is prepended in `buildSystemPrompt()`. Default templates (ids prefixed `tpl-`) cannot be deleted from the UI.
+
+**API key management:**
+Keys are stored in the `settings` table under key `preferences`, user_id `''` (global). `services/aiProvider.js` reads them. The AI routes check for a key and return a descriptive 400 error before starting any SSE stream. No env variable fallback exists.
