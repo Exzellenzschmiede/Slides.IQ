@@ -114,7 +114,6 @@ export async function renderAdmin(container) {
         <h1 class="view-title">${t('admin.title')}</h1>
         <p class="view-subtitle">${t('admin.subtitle')}</p>
       </div>
-      <button class="btn btn-primary" id="add-user-btn">${t('admin.addUserBtn')}</button>
     </div>
 
     <div class="settings-grid" style="max-width:900px;margin-bottom:32px">
@@ -127,15 +126,19 @@ export async function renderAdmin(container) {
       </div>
     </div>
 
-    <div class="card" style="max-width:900px">
-      <div id="user-list" class="text-muted text-sm">${t('admin.loadingUsers')}</div>
+    <div class="settings-grid" style="max-width:900px">
+      <div class="settings-section">
+        <div class="settings-section-title">Benutzerverwaltung</div>
+        <div class="settings-section-desc" style="font-size:13px;color:var(--text-muted);margin-top:4px">Zugänge verwalten</div>
+      </div>
+      <div class="card" style="grid-column:span 2">
+        <div id="user-list" class="text-muted text-sm">${t('admin.loadingUsers')}</div>
+      </div>
     </div>
   `;
 
   loadAiSettings();
   loadUsers();
-
-  document.getElementById('add-user-btn').addEventListener('click', showAddUserForm);
 }
 
 // ─── AI Settings ──────────────────────────────────────────────────────────
@@ -201,58 +204,92 @@ async function saveAiSettings() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
+function generatePassword() {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*';
+  return Array.from({ length: 14 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+function pwFieldHtml(inputId) {
+  return `
+    <div style="display:flex;gap:8px;align-items:stretch">
+      <div class="password-wrapper" style="flex:1">
+        <input type="password" class="form-input" id="${inputId}" placeholder="••••••••" autocomplete="new-password">
+        <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="${inputId}-gen" style="white-space:nowrap;flex-shrink:0">⚙ Generieren</button>
+    </div>`;
+}
+
 async function loadUsers() {
   const list = document.getElementById('user-list');
   if (!list) return;
   try {
     const users = await api.auth.users.list();
-    if (!users.length) {
-      list.innerHTML = `<p class="text-muted text-sm">${t('admin.noUsers')}</p>`;
-      return;
-    }
+
+    const thStyle = 'text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em';
+
     list.innerHTML = `
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="border-bottom:1px solid var(--border)">
-            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${t('admin.colName')}</th>
-            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${t('admin.colEmail')}</th>
-            <th style="text-align:left;padding:10px 8px;font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">${t('admin.colRole')}</th>
+            <th style="${thStyle}">${t('admin.colName')}</th>
+            <th style="${thStyle}">${t('admin.colEmail')}</th>
+            <th style="${thStyle}">${t('admin.colRole')}</th>
+            <th style="${thStyle}">Status</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          ${users.map(u => `
-            <tr style="border-bottom:1px solid var(--border)" data-uid="${escHtml(u.id)}">
+          ${users.map(u => {
+            const isSelf = u.id === window.__currentUser?.id;
+            const activeStyle = u.is_active !== 0
+              ? 'background:rgba(34,197,94,.15);color:#4ade80'
+              : 'background:rgba(239,68,68,.15);color:#f87171';
+            const activeLabel = u.is_active !== 0 ? 'Aktiv' : 'Inaktiv';
+            return `
+            <tr style="border-bottom:1px solid var(--border);opacity:${u.is_active !== 0 ? '1' : '.6'}" data-uid="${escHtml(u.id)}">
               <td style="padding:10px 8px;font-size:14px">${escHtml(u.name)}</td>
               <td style="padding:10px 8px;font-size:13px;color:var(--text-muted)">${escHtml(u.email)}</td>
               <td style="padding:10px 8px">
-                ${u.id !== window.__currentUser?.id ? `
-                  <button class="btn btn-ghost btn-sm tag" style="font-size:11px;cursor:pointer;${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}" data-action="toggle-role" data-uid="${escHtml(u.id)}" data-role="${escHtml(u.role)}" title="${t('admin.colRole')}">
+                ${!isSelf ? `
+                  <button class="btn btn-ghost btn-sm tag" style="font-size:11px;cursor:pointer;${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}" data-action="toggle-role" data-uid="${escHtml(u.id)}" data-role="${escHtml(u.role)}" title="Rolle wechseln">
                     ${escHtml(u.role)} ⇄
                   </button>
                 ` : `<span class="tag" style="${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}">${escHtml(u.role)}</span>`}
               </td>
+              <td style="padding:10px 8px">
+                <span class="tag" style="${activeStyle}">${activeLabel}</span>
+              </td>
               <td style="padding:6px 8px;text-align:right;white-space:nowrap">
-                ${u.id !== window.__currentUser?.id ? `
+                ${!isSelf ? `
+                  <button class="btn btn-ghost btn-sm" style="font-size:12px" data-action="edit" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}" data-email="${escHtml(u.email)}" data-role="${escHtml(u.role)}">Bearbeiten</button>
                   <button class="btn btn-ghost btn-sm" style="font-size:12px" data-action="reset-pw" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}">${t('admin.resetPwBtn')}</button>
+                  <button class="btn btn-ghost btn-sm" style="font-size:12px" data-action="toggle-active" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}" data-active="${u.is_active}">${u.is_active !== 0 ? 'Deaktivieren' : 'Aktivieren'}</button>
                   <button class="btn btn-ghost btn-sm" style="font-size:12px;color:var(--danger)" data-action="delete" data-uid="${escHtml(u.id)}" data-name="${escHtml(u.name)}">${t('admin.deleteBtn')}</button>
                 ` : `<span class="text-muted text-xs">${t('admin.you')}</span>`}
               </td>
-            </tr>
-          `).join('')}
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <button class="btn btn-primary btn-sm" id="add-user-btn">+ Benutzer hinzufügen</button>
+      </div>
     `;
 
-    list.querySelectorAll('[data-action="toggle-role"]').forEach(btn => {
-      btn.addEventListener('click', () => toggleRole(btn.dataset.uid, btn.dataset.role));
-    });
-    list.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', () => deleteUser(btn.dataset.uid, btn.dataset.name));
-    });
-    list.querySelectorAll('[data-action="reset-pw"]').forEach(btn => {
-      btn.addEventListener('click', () => showResetPasswordForm(btn.dataset.uid, btn.dataset.name));
-    });
+    list.querySelectorAll('[data-action="toggle-role"]').forEach(btn =>
+      btn.addEventListener('click', () => toggleRole(btn.dataset.uid, btn.dataset.role)));
+    list.querySelectorAll('[data-action="delete"]').forEach(btn =>
+      btn.addEventListener('click', () => deleteUser(btn.dataset.uid, btn.dataset.name)));
+    list.querySelectorAll('[data-action="reset-pw"]').forEach(btn =>
+      btn.addEventListener('click', () => showResetPasswordForm(btn.dataset.uid, btn.dataset.name)));
+    list.querySelectorAll('[data-action="toggle-active"]').forEach(btn =>
+      btn.addEventListener('click', () => toggleActive(btn.dataset.uid, btn.dataset.name, btn.dataset.active)));
+    list.querySelectorAll('[data-action="edit"]').forEach(btn =>
+      btn.addEventListener('click', () => showEditUserForm(btn.dataset.uid, btn.dataset.name, btn.dataset.email, btn.dataset.role)));
+    document.getElementById('add-user-btn')?.addEventListener('click', showAddUserForm);
   } catch (err) {
     list.innerHTML = `<p style="color:var(--danger)">${escHtml(err.message)}</p>`;
   }
@@ -273,6 +310,21 @@ function toggleRole(id, currentRole) {
   });
 }
 
+function toggleActive(id, name, currentActive) {
+  const activate = currentActive === '0' || currentActive === 0;
+  const action = activate ? 'Aktivieren' : 'Deaktivieren';
+  showConfirmModal(`${action}: ${name}`, `Benutzer "${escHtml(name)}" wird ${activate ? 'aktiviert' : 'deaktiviert'}.`, {
+    confirmLabel: action,
+    onConfirm: async () => {
+      try {
+        await api.auth.users.toggleActive(id);
+        toastSuccess(`Benutzer ${activate ? 'aktiviert' : 'deaktiviert'}.`);
+        loadUsers();
+      } catch (err) { toastError(err.message); }
+    }
+  });
+}
+
 function deleteUser(id, name) {
   showConfirmModal(t('admin.confirmDeleteUser', { name }), `Benutzer "${escHtml(name)}" wird unwiderruflich gelöscht.`, {
     confirmLabel: 'Löschen', danger: true,
@@ -286,27 +338,72 @@ function deleteUser(id, name) {
   });
 }
 
+function showEditUserForm(id, name, email, role) {
+  showModal('Benutzer bearbeiten', `
+    <div class="form-group">
+      <label class="form-label">${t('admin.nameLabel')}</label>
+      <input type="text" class="form-input" id="edit-user-name" value="${escHtml(name)}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t('admin.emailLabel')}</label>
+      <input type="email" class="form-input" id="edit-user-email" value="${escHtml(email)}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t('admin.roleLabel')}</label>
+      <select class="form-select" id="edit-user-role">
+        <option value="user" ${role === 'user' ? 'selected' : ''}>${t('admin.roleUser')}</option>
+        <option value="admin" ${role === 'admin' ? 'selected' : ''}>${t('admin.roleAdmin')}</option>
+      </select>
+    </div>
+    <div id="edit-user-error" style="color:var(--danger);font-size:13px;display:none"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost" id="edit-user-cancel">${t('common.cancel')}</button>
+      <button class="btn btn-primary" id="edit-user-confirm">Speichern</button>
+    </div>
+  `);
+
+  document.getElementById('edit-user-cancel').addEventListener('click', closeModal);
+  document.getElementById('edit-user-confirm').addEventListener('click', async () => {
+    const errEl = document.getElementById('edit-user-error');
+    errEl.style.display = 'none';
+    try {
+      await api.auth.users.update(id, {
+        name: document.getElementById('edit-user-name').value.trim(),
+        email: document.getElementById('edit-user-email').value.trim(),
+        role: document.getElementById('edit-user-role').value,
+      });
+      closeModal();
+      toastSuccess('Benutzer gespeichert.');
+      loadUsers();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = '';
+    }
+  });
+}
+
 function showResetPasswordForm(id, name) {
   showModal(t('admin.resetPwTitle'), `
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">${t('admin.resetPwFor')} <strong>${escHtml(name)}</strong></p>
     <div class="form-group">
       <label class="form-label">${t('admin.resetPwLabel')}</label>
-      <div class="password-wrapper">
-        <input type="password" class="form-input" id="reset-pw-input" placeholder="••••••••">
-        <button type="button" class="password-toggle" title="${t('admin.resetPwLabel')}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button>
-      </div>
+      ${pwFieldHtml('reset-pw-input')}
     </div>
     <div id="reset-pw-error" style="color:var(--danger);font-size:13px;display:none"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-ghost" onclick="window.__modalApi.closeModal()">${t('common.cancel')}</button>
+      <button class="btn btn-ghost" id="reset-pw-cancel">${t('common.cancel')}</button>
       <button class="btn btn-primary" id="reset-pw-confirm-btn">${t('admin.resetPwSave')}</button>
     </div>
   `);
 
   initPasswordToggles(document);
 
+  document.getElementById('reset-pw-cancel').addEventListener('click', closeModal);
+  document.getElementById('reset-pw-input-gen').addEventListener('click', () => {
+    const input = document.getElementById('reset-pw-input');
+    input.value = generatePassword();
+    input.type = 'text';
+  });
   document.getElementById('reset-pw-confirm-btn').addEventListener('click', async () => {
     const errEl = document.getElementById('reset-pw-error');
     const pw = document.getElementById('reset-pw-input').value;
@@ -334,12 +431,7 @@ function showAddUserForm() {
     </div>
     <div class="form-group">
       <label class="form-label">${t('admin.passwordLabel')}</label>
-      <div class="password-wrapper">
-        <input type="password" class="form-input" id="new-user-password">
-        <button type="button" class="password-toggle" title="${t('admin.passwordLabel')}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button>
-      </div>
+      ${pwFieldHtml('new-user-password')}
     </div>
     <div class="form-group">
       <label class="form-label">${t('admin.roleLabel')}</label>
@@ -350,13 +442,19 @@ function showAddUserForm() {
     </div>
     <div id="new-user-error" style="color:var(--danger);font-size:13px;display:none"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-ghost" onclick="window.__modalApi.closeModal()">${t('admin.cancelBtn')}</button>
+      <button class="btn btn-ghost" id="add-user-cancel">${t('admin.cancelBtn')}</button>
       <button class="btn btn-primary" id="create-user-confirm-btn">${t('admin.createBtn')}</button>
     </div>
   `);
 
   initPasswordToggles(document);
 
+  document.getElementById('add-user-cancel').addEventListener('click', closeModal);
+  document.getElementById('new-user-password-gen').addEventListener('click', () => {
+    const input = document.getElementById('new-user-password');
+    input.value = generatePassword();
+    input.type = 'text';
+  });
   document.getElementById('create-user-confirm-btn').addEventListener('click', async () => {
     const errEl = document.getElementById('new-user-error');
     errEl.style.display = 'none';
