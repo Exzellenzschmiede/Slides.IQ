@@ -14,7 +14,7 @@ Every presentation stored in Slides.IQ is a **self-contained HTML file**. It can
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Presentation Title</title>
   <style>
-    /* Template/theme CSS authored by Claude */
+    /* Theme CSS authored by the AI */
   </style>
 </head>
 <body>
@@ -29,7 +29,7 @@ Every presentation stored in Slides.IQ is a **self-contained HTML file**. It can
       <!-- Slide 2 content -->
     </div>
 
-    <!-- ... more slides ... -->
+    <!-- … more slides … -->
 
   </div>
 
@@ -50,14 +50,14 @@ The navigation engine is wrapped in a pair of HTML comments:
 
 ```html
 <!-- SLIDESIQ:FRAMEWORK:START -->
-...framework CSS and JS...
+… framework CSS and JS …
 <!-- SLIDESIQ:FRAMEWORK:END -->
 ```
 
 These markers serve two purposes:
 
 1. **Injection:** `injectFramework(html)` in `services/claude.js` searches for these markers. If absent, it inserts the current framework block before `</body>`. If present, it replaces the existing block with the current version.
-2. **Stripping:** `stripFramework(html)` removes everything between (and including) the markers before sending HTML to Claude for editing. This prevents Claude from seeing or modifying framework code.
+2. **Stripping:** `stripFramework(html)` removes everything between (and including) the markers before sending HTML to the AI for editing. This prevents the AI from seeing or modifying framework code.
 
 Never manually edit content between these markers — it will be overwritten on the next server start or content update.
 
@@ -104,7 +104,7 @@ Attach speaker notes to any slide via the `data-notes` attribute:
 
 ## CSS Custom Properties
 
-Templates define a set of CSS custom properties on `:root` (or `body`) that provide the colour scheme and typography. Claude is instructed to use these variables in the slides it generates so that the visual style is consistent and changeable via template settings.
+Templates define CSS custom properties on `:root` that provide the colour scheme and typography. The AI is instructed to use these variables so that the visual style is consistent and changeable via template settings.
 
 | Property | Description |
 |---|---|
@@ -169,24 +169,25 @@ Pressing **O** tiles all slides in a scrollable grid. Clicking a tile jumps to t
 
 ## Viewport Scaling: 1280×720 Base
 
-Slides are authored at a fixed 1280×720 px canvas. The framework applies a CSS `transform: scale()` to fit the canvas into the available browser viewport while preserving the 16:9 aspect ratio:
+Slides are authored at a fixed 1280×720 px canvas. The framework applies a CSS `transform: scale()` to fit the canvas into the available browser viewport while preserving the 16:9 aspect ratio. A `ResizeObserver` keeps the scale in sync whenever the container changes size (window resize, fullscreen toggle, split-pane resize).
 
 ```javascript
 function scaleSlides() {
-  const scaleX = window.innerWidth  / 1280;
-  const scaleY = window.innerHeight / 720;
+  const rect = wrapper.getBoundingClientRect();
+  const scaleX = rect.width  / 1280;
+  const scaleY = rect.height / 720;
   const scale  = Math.min(scaleX, scaleY);
-  container.style.transform = `scale(${scale})`;
+  container.style.transform       = `scale(${scale})`;
   container.style.transformOrigin = 'top left';
+  container.style.left = `${(rect.width  - 1280 * scale) / 2}px`;
+  container.style.top  = `${(rect.height - 720  * scale) / 2}px`;
 }
-window.addEventListener('resize', scaleSlides);
-scaleSlides();
 ```
 
 This means:
 - All pixel values in slide CSS are relative to the 1280×720 viewport — use them freely.
-- Font sizes, padding, and layout will scale proportionally on any screen.
-- The PDF export renders each slide at exactly 1280×720 before downscaling to A4/letter.
+- Font sizes, padding, and layout scale proportionally on any screen.
+- The PDF export renders each slide at exactly 1280×720 before assembling to multi-page PDF.
 
 ---
 
@@ -194,7 +195,7 @@ This means:
 
 ### `injectFramework(html)`
 
-Called in `routes/presentations.js` after every content update and in `server.js` at startup (for migration):
+Called in `routes/presentations.js` after every content update and in `server.js` at startup (migration):
 
 1. Strips any existing framework block.
 2. Appends the current `PRESENTATION_FRAMEWORK` constant before `</body>`.
@@ -202,26 +203,26 @@ Called in `routes/presentations.js` after every content update and in `server.js
 
 ### `stripFramework(html)`
 
-Called in `routes/ai.js` before building the Claude messages for slide editing:
+Called in `routes/ai.js` before building the AI messages for slide editing:
 
 1. Finds the `<!-- SLIDESIQ:FRAMEWORK:START -->` … `<!-- SLIDESIQ:FRAMEWORK:END -->` block using a regex.
 2. Removes it entirely.
 3. Returns the stripped HTML.
 
-This keeps the Claude context clean — Claude never receives framework code and therefore cannot accidentally modify or duplicate it.
+This keeps the AI context clean — the AI never receives framework code and therefore cannot accidentally modify or duplicate it.
 
 ---
 
-## How Claude Is Instructed to Generate Slides
+## How the AI Is Instructed to Generate Slides
 
-The system prompt passed to Claude (built in `buildSystemPrompt()`) contains:
+The system prompt passed to the AI (built in `buildSystemPrompt()`) contains:
 
-1. **Role instructions** — Claude is told it is a presentation designer and must output only valid HTML.
-2. **Structural rules** — must use `<div id="nexus-presentation">` as the outermost wrapper, each slide must be `<div class="slide">`.
+1. **Role instructions** — the AI is told it is a presentation designer and must output only valid HTML.
+2. **Structural rules** — must use `<div id="nexus-presentation">` as the outermost wrapper; each slide must be `<div class="slide">`.
 3. **CSS variables** — instructed to define `--primary`, `--accent`, `--bg`, `--text`, `--font` on `:root`.
 4. **No framework code** — explicitly told not to add navigation, keyboard handlers, or script tags beyond slide content.
 5. **Template system prompt** — the selected template's `system_prompt` field is prepended, providing style, tone, and layout guidance specific to that template.
 6. **Brand overrides** — if the user has brand settings (colours, font, name), these are appended as additional constraints.
-7. **The full `PRESENTATION_FRAMEWORK` block** — included in the system prompt as reference so Claude understands what will be injected, though it is instructed not to reproduce it.
+7. **The full `PRESENTATION_FRAMEWORK` block** — included in the system prompt as reference so the AI understands what will be injected, though it is instructed not to reproduce it.
 
-Claude outputs only the `<html>` … `</html>` block with slides; the framework is then injected by the server before saving.
+The AI outputs only the `<html>` … `</html>` block with slides; the framework is then injected by the server before saving.

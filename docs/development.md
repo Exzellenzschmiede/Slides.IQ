@@ -7,15 +7,15 @@
 ```bash
 git clone <repo-url> slides-iq
 cd slides-iq
-cp .env.example .env
-# Edit .env — at minimum set ANTHROPIC_API_KEY
 npm install
 npm run dev
 ```
 
 The dev server starts with `node --watch server.js`, which restarts automatically when any `.js` file changes. The database file is created at `./data/nexus.db` (or at `DB_PATH` if set).
 
-On first run, the app detects no users exist and redirects to the setup screen at `/#/setup` where you create the initial admin account.
+On first run, the app detects no users exist and redirects to the setup screen at `/#/setup` where you create the initial admin account. After setup, navigate to **Administration → KI-Anbieter** to enter your AI provider API key.
+
+There is no `.env` file required. The only environment variables that affect behaviour are `PORT`, `SESSION_SECRET`, `BASE_URL`, and `DB_PATH` — none of them are required for local development.
 
 ---
 
@@ -25,58 +25,85 @@ On first run, the app detects no users exist and redirects to the setup screen a
 |---|---|---|
 | Server restart | Automatic on file change | Manual |
 | Error detail | Full stack traces in logs | Same (no env distinction currently) |
-| Session secret | Defaults to a random value | Set `SESSION_SECRET` in `.env` |
+| Session secret | Defaults to a random value | Set `SESSION_SECRET` in env |
 | HTTPS | Not configured | Use a reverse proxy (see Deployment) |
 
 There is no build step. The frontend is served as static files from `public/` — plain ES modules, no bundler.
 
 ---
 
+## Project Structure
+
+```
+slides-iq/
+├── server.js                  # Express app entry point
+├── database.js                # SQLite setup, migrations, seeding
+├── middleware/
+│   └── auth.js                # requireAuth / requireAdmin
+├── routes/
+│   ├── auth.js                # /api/auth/*
+│   ├── presentations.js       # /api/presentations/*
+│   ├── templates.js           # /api/templates/*
+│   ├── ai.js                  # /api/ai/*
+│   └── admin.js               # /api/admin/*
+├── services/
+│   ├── aiProvider.js          # Resolves active provider settings from DB
+│   ├── claude.js              # Multi-provider AI client + framework helpers
+│   ├── pdf.js                 # Puppeteer PDF export
+│   ├── fileParser.js          # Multi-format file parsing
+│   └── slideUtils.js          # HTML slide manipulation utilities
+└── public/
+    ├── index.html             # SPA shell
+    ├── css/                   # Global stylesheet
+    └── js/
+        ├── app.js             # Bootstrap
+        ├── router.js          # Hash-based SPA router
+        ├── api.js             # Centralised fetch wrapper + SSE consumer
+        ├── i18n.js            # Translations (en/de/it/nl/pl)
+        ├── views/             # One file per page
+        ├── components/        # modal.js, toast.js
+        └── utils/             # passwordToggle.js, etc.
+```
+
+---
+
 ## Adding a New View
 
-Views are plain ES modules in `public/js/views/`. Each module exports two functions: `render(params)` returns an HTML string, and `init(params)` binds event listeners and loads data.
+Views are plain ES modules in `public/js/views/`. Each module exports a `renderXxx(container)` async function that receives the `#view-container` DOM element and populates it.
 
 **Steps:**
 
 1. Create `public/js/views/myView.js`:
 
 ```javascript
-// public/js/views/myView.js
 import { api } from '../api.js';
-import { showToast } from '../components/toast.js';
+import { toastError } from '../components/toast.js';
 
-export function render(params) {
-  return `
-    <div class="view-container">
-      <h1>My View</h1>
-      <div id="my-content">Loading...</div>
-    </div>
-  `;
-}
-
-export async function init(params) {
-  const data = await api.myResource.list();
-  document.getElementById('my-content').textContent = JSON.stringify(data);
+export async function renderMyView(container) {
+  container.innerHTML = `<div class="view-header"><h1>My View</h1></div>`;
+  try {
+    const data = await api.presentations.list();
+    // … render data
+  } catch (err) {
+    toastError(err.message);
+  }
 }
 ```
 
-2. Register the route in `public/js/app.js`:
+2. Register the route in `public/js/router.js` (or wherever routes are registered in `app.js`):
 
 ```javascript
-import { render as myViewRender, init as myViewInit } from './views/myView.js';
-
-// Inside the router registration block:
-router.register('/my-view', myViewRender, myViewInit);
-// With params: router.register('/my-view/:id', myViewRender, myViewInit);
+import { renderMyView } from './views/myView.js';
+router.register('/my-view', renderMyView);
 ```
 
-3. Add a navigation link in `public/index.html` (inside the `<nav>` element):
+3. Add a navigation link in `public/index.html`:
 
 ```html
-<a href="#/my-view" class="nav-link" data-i18n="nav.myView">My View</a>
+<a href="#/my-view" class="nav-link" data-route="my-view">My View</a>
 ```
 
-4. Add the i18n key to all locales (see Adding Translations below).
+4. Add i18n keys (see *Adding Translations* below).
 
 ---
 
@@ -98,101 +125,86 @@ router.get('/:id/summary', requireAuth, (req, res) => {
 
 **Frontend:**
 
-Add the corresponding method to the `api` object in `public/js/api.js`:
+Add the method to the `api` object in `public/js/api.js`:
 
 ```javascript
-// In the api object, under the relevant namespace:
 presentations: {
-  // ... existing methods ...
+  // existing methods …
   getSummary: (id) => apiFetch(`/presentations/${id}/summary`),
 },
 ```
 
-Then call it from a view:
+---
 
-```javascript
-const summary = await api.presentations.getSummary(presentationId);
-```
+## Adding a New AI Provider
+
+1. Add the provider entry to `PROVIDERS` in `public/js/views/admin.js` (label, models, key placeholder).
+2. Add the same provider to `DEFAULT_MODELS` in `services/aiProvider.js`.
+3. Add the generation call in `services/claude.js` inside `generatePresentation()` — dispatch on `provider`.
+4. Seed the new provider into the default `preferences` settings in `database.js` so existing installs get the new entry on next startup.
 
 ---
 
 ## Adding Translations
 
-All UI strings live in `public/js/i18n.js`. The file exports a `translations` object keyed by locale code, each containing a flat map of `key: "string"` pairs.
+All UI strings live in `public/js/i18n.js`. The file exports a nested `translations` object keyed by locale code.
 
 Supported locales: `en`, `de`, `it`, `nl`, `pl`.
 
 **Steps:**
 
-1. Open `public/js/i18n.js` and add the key to every locale:
+1. Add the key to every locale in `i18n.js`:
 
 ```javascript
-const translations = {
-  en: {
-    // existing keys ...
-    'nav.myView': 'My View',
-    'myView.heading': 'Welcome to My View',
-  },
-  de: {
-    'nav.myView': 'Meine Ansicht',
-    'myView.heading': 'Willkommen in meiner Ansicht',
-  },
-  it: {
-    'nav.myView': 'La mia vista',
-    'myView.heading': 'Benvenuto nella mia vista',
-  },
-  nl: {
-    'nav.myView': 'Mijn weergave',
-    'myView.heading': 'Welkom in mijn weergave',
-  },
-  pl: {
-    'nav.myView': 'Mój widok',
-    'myView.heading': 'Witaj w moim widoku',
-  },
-};
+en: {
+  'myView.heading': 'Welcome',
+},
+de: {
+  'myView.heading': 'Willkommen',
+},
+// … it, nl, pl
 ```
 
-2. Use the key in HTML via the `data-i18n` attribute (automatically resolved by the i18n init code in `app.js`):
-
-```html
-<h1 data-i18n="myView.heading">My View</h1>
-```
-
-3. Or use it programmatically in JS:
+2. Use programmatically in JS:
 
 ```javascript
 import { t } from '../i18n.js';
 element.textContent = t('myView.heading');
 ```
 
-If a key is missing in the active locale, the i18n module falls back to the `en` value. If missing in `en` too, the key string itself is displayed.
+3. Or inline in an HTML template string:
+
+```javascript
+container.innerHTML = `<h1>${t('myView.heading')}</h1>`;
+```
+
+If a key is missing in the active locale, the i18n module falls back to `en`. If missing in `en` too, the key string itself is displayed.
 
 ---
 
 ## File Upload Handling
 
-File uploads flow through `services/fileParser.js`. The `parseFile(file)` function accepts a Multer file object and returns a parsed representation:
+File uploads flow through `services/fileParser.js`. `parseFile(file)` accepts a Multer file object and returns:
 
 | Format | Return shape |
 |---|---|
 | Plain text / CSV | `{ type: 'text', content: 'string' }` |
 | Image (jpg/png/gif/webp) | `{ type: 'image', mediaType: 'image/jpeg', data: 'base64string' }` |
-| Excel (.xlsx) | `{ type: 'text', content: 'CSV-like text extracted by ExcelJS' }` |
-| Word (.docx) | `{ type: 'text', content: 'plain text extracted by Mammoth' }` |
+| Excel (.xlsx) | `{ type: 'text', content: 'CSV-like text via ExcelJS' }` |
+| Word (.docx) | `{ type: 'text', content: 'plain text via Mammoth' }` |
 | PDF | `{ type: 'text', content: 'extracted text via pdf-parse' }` |
-| PPTX | `{ type: 'text', content: 'slide text extracted via adm-zip' }` |
+| PPTX | `{ type: 'text', content: 'slide text via adm-zip' }` |
 
-Images become vision content blocks in the Claude messages array. All other types become text content blocks.
+Images become vision content blocks in the AI messages array. All other types become text content blocks.
 
-To support a new file format:
-
-1. Add a MIME type / extension check in the dispatch block of `parseFile()`.
-2. Install the required parsing library (`npm install <lib>`).
+To support a new format:
+1. Add a MIME type / extension check in `parseFile()`.
+2. Install the required parsing library.
 3. Return one of the two shapes above.
 
 ---
 
-## Deployment Notes
+## Deployment
 
 ### Reverse Proxy (Nginx / Caddy)
 
@@ -216,18 +228,18 @@ server {
 }
 ```
 
-The `proxy_read_timeout` must be long enough to cover the full Claude streaming response (generation can take 30–120 seconds for complex presentations).
+The `proxy_read_timeout` must be long enough to cover the full AI streaming response (generation can take 30–120 seconds for complex presentations).
 
 ### Environment Variables for Production
 
 ```bash
-NODE_ENV=production
 PORT=3000
 SESSION_SECRET=<long random string>   # Required — do not use the default
 BASE_URL=https://slides.example.com   # Required for correct share link URLs
 DB_PATH=/var/data/nexus.db            # Recommended: persist outside the app directory
-ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+AI API keys are configured in the **Admin panel** — not in environment variables.
 
 ### Trust Proxy
 
@@ -240,8 +252,6 @@ app.set('trust proxy', 1);
 This ensures `express-session` sets the session cookie with `secure: true` correctly when the request arrives over HTTP internally but HTTPS externally.
 
 ### Process Management
-
-Use a process manager to keep the server running:
 
 ```bash
 # PM2
