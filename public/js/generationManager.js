@@ -36,6 +36,7 @@ class GenerationManager {
       id, presentationId, title, label, type, meta,
       status: 'running',
       chars: 0,
+      liveHtml: '',
       slideCount: null,
       newIndex: null,
       error: null,
@@ -73,9 +74,10 @@ class GenerationManager {
       for await (const event of apiCall(job.controller.signal)) {
         if (event.type === 'chunk') {
           job.chars += event.text.length;
+          job.liveHtml += event.text;
           this._updateCard(job);
           window.dispatchEvent(new CustomEvent('genmanager:progress', {
-            detail: { jobId: job.id, presentationId: job.presentationId, chars: job.chars }
+            detail: { jobId: job.id, presentationId: job.presentationId, chars: job.chars, liveHtml: job.liveHtml }
           }));
         } else if (event.type === 'done') {
           if (event.slide_count != null) job.slideCount = event.slide_count;

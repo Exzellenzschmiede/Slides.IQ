@@ -163,10 +163,13 @@ function buildStudioHTML(p) {
             </div>`
         }
         <!-- Streaming overlay -->
-        <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
-          <div class="loading-orb"></div>
-          <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
-          <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
+        <div id="stream-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:5">
+          <div class="stream-progress-bar"></div>
+          <div class="stream-status-badge">
+            <div class="gen-toast-dots"><span></span><span></span><span></span></div>
+            <span id="stream-label" class="text-xs text-muted"></span>
+            <span id="stream-chars" class="font-mono text-xs text-muted"></span>
+          </div>
         </div>
       </div>
 
@@ -407,10 +410,13 @@ async function refreshAfterSlideOp(slideCount, gotoIndex = 0) {
   const container = document.getElementById('preview-container');
   if (container) {
     container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
-      <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
-        <div class="loading-orb"></div>
-        <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
-        <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
+      <div id="stream-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:5">
+        <div class="stream-progress-bar"></div>
+        <div class="stream-status-badge">
+          <div class="gen-toast-dots"><span></span><span></span><span></span></div>
+          <span id="stream-label" class="text-xs text-muted"></span>
+          <span id="stream-chars" class="font-mono text-xs text-muted"></span>
+        </div>
       </div>`;
     loadPreview();
   }
@@ -524,9 +530,9 @@ function showStreamOverlay(label) {
   const overlay = document.getElementById('stream-overlay');
   const labelEl = document.getElementById('stream-label');
   const charEl = document.getElementById('stream-chars');
-  if (overlay) overlay.style.display = 'flex';
+  if (overlay) overlay.style.display = 'block';
   if (labelEl) labelEl.textContent = label;
-  if (charEl) charEl.textContent = t('studio.zeroChars');
+  if (charEl) charEl.textContent = '';
 }
 
 function hideStreamOverlay() {
@@ -580,12 +586,34 @@ function bindGenerationEvents() {
   if (_genDoneListener)     window.removeEventListener('genmanager:done',     _genDoneListener);
   if (_genErrorListener)    window.removeEventListener('genmanager:error',    _genErrorListener);
 
+  let _lastSrcdocUpdate = 0;
   _genProgressListener = (e) => {
     if (e.detail.presentationId !== currentPresentation?.id) return;
+
     const charEl = document.getElementById('stream-chars');
     if (charEl) charEl.textContent = t('studio.streamChars', {
       count: e.detail.chars.toLocaleString(getCurrentLocale())
     });
+
+    // Live iframe preview (throttled to 300 ms)
+    const now = Date.now();
+    if (e.detail.liveHtml && now - _lastSrcdocUpdate > 300) {
+      _lastSrcdocUpdate = now;
+      let iframe = document.getElementById('preview-iframe');
+      if (!iframe) {
+        const container = document.getElementById('preview-container');
+        const placeholder = container?.querySelector('.preview-placeholder');
+        if (placeholder) placeholder.remove();
+        if (container) {
+          iframe = document.createElement('iframe');
+          iframe.id = 'preview-iframe';
+          iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+          const overlay = document.getElementById('stream-overlay');
+          container.insertBefore(iframe, overlay);
+        }
+      }
+      if (iframe) iframe.srcdoc = e.detail.liveHtml;
+    }
   };
 
   _genDoneListener = async (e) => {
@@ -604,10 +632,13 @@ function bindGenerationEvents() {
         const container = document.getElementById('preview-container');
         if (container) {
           container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
-            <div id="stream-overlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)">
-              <div class="loading-orb"></div>
-              <div class="text-muted text-sm" id="stream-label">${t('studio.streamLabel')}</div>
-              <div id="stream-chars" class="font-mono text-xs text-muted">${t('studio.zeroChars')}</div>
+            <div id="stream-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:5">
+              <div class="stream-progress-bar"></div>
+              <div class="stream-status-badge">
+                <div class="gen-toast-dots"><span></span><span></span><span></span></div>
+                <span id="stream-label" class="text-xs text-muted"></span>
+                <span id="stream-chars" class="font-mono text-xs text-muted"></span>
+              </div>
             </div>`;
           loadPreview();
         }
