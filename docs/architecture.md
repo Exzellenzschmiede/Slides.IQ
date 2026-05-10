@@ -16,9 +16,9 @@
 └────────────────────────┬────────────────────────────────────┘
                          │  HTTP REST / SSE / WebSocket
 ┌────────────────────────▼────────────────────────────────────┐
-│                  Express Server (server.js)                  │
+│                  Express Server (server.js)                 │
 │                                                             │
-│  Middleware                                                  │
+│  Middleware                                                 │
 │  ├── express-session (SQLite store)                         │
 │  ├── middleware/auth.js  requireAuth / requireAdmin         │
 │  └── express-rate-limit  (AI routes: 10 req/min)            │
@@ -33,7 +33,7 @@
 │      Public view: /view/:token                              │
 └────┬──────────────┬────────────────────┬────────────────────┘
      │              │                    │
-┌────▼────┐  ┌──────▼──────┐  ┌─────────▼──────────┐
+┌────▼────┐  ┌──────▼──────┐  ┌──────────▼──────────┐
 │ SQLite  │  │  AI APIs    │  │ Puppeteer (PDF)     │
 │(better- │  │ Claude /    │  │ Headless Chromium   │
 │sqlite3) │  │ OpenAI /    │  └────────────────────-┘
