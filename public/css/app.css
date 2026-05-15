@@ -1085,6 +1085,39 @@ html, body {
   font-family: var(--font-mono); font-size: 13px; color: var(--text-muted);
 }
 
+/* ─── Admin Tabs ──────────────────────────────────────────────────────── */
+
+.admin-tabs {
+  display: flex; gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 28px;
+}
+
+.admin-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  color: var(--text-muted); font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all 0.18s;
+  white-space: nowrap;
+}
+
+.admin-tab:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.04);
+}
+
+.admin-tab.active {
+  color: var(--primary-light);
+  border-bottom-color: var(--primary);
+}
+
+.admin-tab-icon { font-size: 16px; }
+
+.admin-panel { display: none; }
+.admin-panel.active { display: block; }
+
 /* ─── Settings ────────────────────────────────────────────────────────── */
 
 .settings-grid {

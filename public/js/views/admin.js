@@ -116,24 +116,36 @@ export async function renderAdmin(container) {
       </div>
     </div>
 
-    <div class="settings-grid" style="max-width:900px;margin-bottom:32px">
-      <div class="settings-section">
-        <div class="settings-section-title">KI-Anbieter</div>
-      </div>
-      <div class="card" style="grid-column:span 2" id="ai-settings-card">
+    <nav class="admin-tabs">
+      <button class="admin-tab active" data-admin-tab="ai">
+        <span class="admin-tab-icon">⚙</span> KI-Anbieter
+      </button>
+      <button class="admin-tab" data-admin-tab="users">
+        <span class="admin-tab-icon">👥</span> Benutzerverwaltung
+      </button>
+    </nav>
+
+    <div id="admin-panel-ai" class="admin-panel active" style="max-width:900px">
+      <div class="card" id="ai-settings-card">
         <div class="text-muted text-sm">Lade…</div>
       </div>
     </div>
 
-    <div class="settings-grid" style="max-width:900px">
-      <div class="settings-section">
-        <div class="settings-section-title">Benutzerverwaltung</div>
-      </div>
-      <div class="card" style="grid-column:span 2">
+    <div id="admin-panel-users" class="admin-panel" style="max-width:900px">
+      <div class="card">
         <div id="user-list" class="text-muted text-sm">${t('admin.loadingUsers')}</div>
       </div>
     </div>
   `;
+
+  container.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      container.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+      container.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('admin-panel-' + tab.dataset.adminTab)?.classList.add('active');
+    });
+  });
 
   loadAiSettings();
   loadUsers();
