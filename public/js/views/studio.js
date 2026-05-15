@@ -25,6 +25,30 @@ let _genProgressListener = null;
 let _genDoneListener = null;
 let _genErrorListener = null;
 
+// Job IDs whose gen-toast cards the studio is suppressing
+let _watchingJobIds = [];
+let _navAwayHandler = null;
+
+// Hide the gen-toast card for a job and register a one-shot hashchange listener
+// that restores it when the user navigates away from the studio.
+function _watchJob(jobId) {
+  genManager.setCardVisible(jobId, false);
+  _watchingJobIds.push(jobId);
+  _bindNavAwayRestore();
+}
+
+function _bindNavAwayRestore() {
+  if (_navAwayHandler) return; // already registered
+  const handler = () => {
+    _watchingJobIds.forEach(id => genManager.setCardVisible(id, true));
+    _watchingJobIds = [];
+    _navAwayHandler = null;
+    window.removeEventListener('hashchange', handler);
+  };
+  _navAwayHandler = handler;
+  window.addEventListener('hashchange', handler);
+}
+
 function getQuickPrompts() {
   return t('studio.quickPrompts');
 }
@@ -37,6 +61,11 @@ export async function renderStudio(container, { id }) {
   slideScopedMode = false;
   slideScopedIndex = -1;
   messageListenerActive = false;
+  _watchingJobIds = [];
+  if (_navAwayHandler) {
+    window.removeEventListener('hashchange', _navAwayHandler);
+    _navAwayHandler = null;
+  }
 
   try {
     currentPresentation = await api.presentations.get(id);
@@ -201,6 +230,10 @@ function initStudio() {
     isGenerating = true;
     showStreamOverlay(active[0].label);
     setGeneratingUI(true, active[0].label);
+    // Hide gen-toast cards — the studio overlay is the primary status indicator
+    active.forEach(j => genManager.setCardVisible(j.id, false));
+    _watchingJobIds = active.map(j => j.id);
+    _bindNavAwayRestore();
   }
 }
 
@@ -476,7 +509,7 @@ function streamEditSlide(slideIndex, prompt) {
   showStreamOverlay(label);
   addChatMessage('user', `[Slide ${slideIndex + 1}] ${prompt}`);
 
-  genManager.start({
+  const jobId = genManager.start({
     presentationId: currentPresentation.id,
     title: currentPresentation.title,
     label,
@@ -484,6 +517,7 @@ function streamEditSlide(slideIndex, prompt) {
     meta: { slideIndex },
     apiCall: (signal) => api.ai.editSlide(currentPresentation.id, slideIndex, prompt, signal),
   });
+  _watchJob(jobId);
 }
 
 function streamInsertSlide(afterIndex, prompt) {
@@ -498,7 +532,7 @@ function streamInsertSlide(afterIndex, prompt) {
   showStreamOverlay(label);
   addChatMessage('user', `[${t('common.slides')} ${posLabel}] ${prompt}`);
 
-  genManager.start({
+  const jobId = genManager.start({
     presentationId: currentPresentation.id,
     title: currentPresentation.title,
     label,
@@ -506,6 +540,7 @@ function streamInsertSlide(afterIndex, prompt) {
     meta: { afterIndex },
     apiCall: (signal) => api.ai.insertSlide(currentPresentation.id, afterIndex, prompt, signal),
   });
+  _watchJob(jobId);
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────────
@@ -568,7 +603,7 @@ function sendMessage() {
   addChatMessage('user', prompt + attachmentLabel);
   showStreamOverlay(t('studio.streamLabel'));
 
-  genManager.start({
+  const jobId = genManager.start({
     presentationId: currentPresentation.id,
     title: currentPresentation.title,
     label: t('studio.generating'),
@@ -576,6 +611,7 @@ function sendMessage() {
     meta: {},
     apiCall: (signal) => api.ai.generate(currentPresentation.id, prompt, attachments, signal),
   });
+  _watchJob(jobId);
 }
 
 // ─── Generation manager event wiring ─────────────────────────────────────

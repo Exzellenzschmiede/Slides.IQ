@@ -69,6 +69,15 @@ class GenerationManager {
     );
   }
 
+  // Hide or show the floating toast card for a job.
+  // Call with hidden=true when a studio view is watching the job directly,
+  // restore with hidden=false when the user navigates away.
+  setCardVisible(jobId, visible) {
+    const job = this._jobs.get(jobId);
+    if (!job?.cardEl) return;
+    job.cardEl.style.display = visible ? '' : 'none';
+  }
+
   async _run(job, apiCall) {
     try {
       for await (const event of apiCall(job.controller.signal)) {

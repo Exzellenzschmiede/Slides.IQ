@@ -638,6 +638,8 @@ html, body {
   border-radius: var(--radius-sm);
   font-size: 13px; line-height: 1.5;
   animation: msg-in 0.2s ease;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 @keyframes msg-in {
