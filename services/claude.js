@@ -36,11 +36,31 @@ body { font-family: var(--font, 'Inter', system-ui, sans-serif); background: var
 /* High-specificity rules so Claude's generated CSS cannot override show/hide */
 #nexus-presentation .slide {
   position: absolute !important; inset: 0 !important;
-  display: flex; align-items: flex-start; justify-content: flex-start;
+  display: flex !important; align-items: flex-start !important; justify-content: flex-start !important;
   opacity: 0 !important; pointer-events: none !important;
   transform: translateX(60px) scale(0.97) !important;
   transition: opacity 0.5s cubic-bezier(0.4,0,0.2,1), transform 0.5s cubic-bezier(0.4,0,0.2,1);
-  padding: 4rem; overflow-y: auto; overflow-x: hidden;
+  padding: 4rem !important;
+  overflow-y: auto !important; overflow-x: hidden !important;
+  box-sizing: border-box !important;
+  width: 1280px !important; height: 720px !important;
+  min-width: 0 !important; min-height: 0 !important;
+}
+/* Harden direct children: prevent overflow, honour box model */
+#nexus-presentation .slide > * {
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+/* Media & table elements must never blow out the canvas width */
+#nexus-presentation .slide img,
+#nexus-presentation .slide video,
+#nexus-presentation .slide canvas,
+#nexus-presentation .slide table,
+#nexus-presentation .slide pre,
+#nexus-presentation .slide svg {
+  max-width: 100% !important;
+  height: auto;
 }
 #nexus-presentation .slide.active {
   opacity: 1 !important; pointer-events: all !important;
@@ -278,13 +298,23 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     var offsetY = (availH - 720 * scale) / 2;
     pres.style.transform = 'translate(' + offsetX + 'px, ' + offsetY + 'px) scale(' + scale + ')';
   }
+  // Initial scaling + retries to catch deferred iframe/flexbox layouts
   scalePresentation();
+  setTimeout(scalePresentation, 50);
+  setTimeout(scalePresentation, 200);
+  setTimeout(scalePresentation, 600);
   window.addEventListener('resize', scalePresentation);
+  window.addEventListener('load', scalePresentation);
   document.addEventListener('fullscreenchange', function () {
-    // Fire at 50ms and 250ms to catch both fast and slow browser layout updates
     setTimeout(scalePresentation, 50);
     setTimeout(scalePresentation, 250);
+    setTimeout(scalePresentation, 600);
   });
+  // ResizeObserver ensures correct scaling when the iframe container is resized
+  // (e.g. Studio split-pane, sidebar toggling)
+  try {
+    new ResizeObserver(function() { scalePresentation(); }).observe(document.documentElement);
+  } catch(e) {}
 
   // Init
   goto(0);
@@ -337,10 +367,14 @@ Minimales Grundgerüst:
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Titel</title>
   <style>
-    /* Dein komplettes CSS hier — ABER NICHT: position/opacity/transform für .slide */
-    :root { --primary: #7c3aed; --accent: #06b6d4; --bg: #05070f; }
+    /* Dein komplettes CSS hier */
+    /* ✅ ERLAUBT: Custom Properties, Backgrounds auf .slide, Animationen, Grid, Flexbox */
+    /* 🚫 VERBOTEN: position/opacity/transform auf .slide, overflow:hidden, vw/vh-Einheiten, position:fixed */
+    :root { --primary: #7c3aed; --accent: #06b6d4; --bg: #05070f; --text: #f0f0ff; --font: 'Inter', sans-serif; }
     body { margin: 0; background: var(--bg); }
-    /* Slide-Inhalte stylen, aber nicht die Slides selbst positionieren */
+    /* Background IMMER direkt auf .slide — nie nur auf einem Kind-Element */
+    .slide { background: var(--bg); }
+    /* Inhalts-Container: kein overflow:hidden, kein height:100% */
     .slide-content { width: 100%; max-width: 1100px; }
   </style>
 </head>
@@ -386,6 +420,7 @@ Minimales Grundgerüst:
 - mix-blend-mode für künstlerische Effekte
 - CSS-Variablen für kohärentes Theming
 - box-shadow mit Color für Glow-Effekte
+- **Schriftgrößen ausschließlich in `px`** — kein `vw`, `vh`, `em`, `clamp()` mit Viewport-Einheiten
 
 ### Interaktive Elemente:
 - Hover-Effekte auf wichtigen Elementen
@@ -403,6 +438,38 @@ Format: "Kernbotschaft dieser Slide. Was betonen? Übergangssatz zur nächsten S
 - Text: kurz, prägnant, impactvoll (kein Wall of Text)
 - Typografische Hierarchie (H1 > H2 > Body)
 - Visuelle "Aha-Momente" — mindestens einer pro 3 Slides
+
+## 🚫 CSS-VERBOTE — NIEMALS VERWENDEN (führen zu Rendering-Fehlern)
+
+1. **`overflow: hidden`** auf `.slide` oder einem Kinder-Element — die Engine steuert Overflow
+2. **`position: fixed`** — bricht im skalierten 1280×720-Canvas vollständig
+3. **Viewport-Einheiten** (`vw`, `vh`, `dvh`, `svh`, `cqw`, `cqh`) — der Canvas ist immer 1280×720 px; nutze ausschließlich `px`-Werte oder `%` relativ zum 1280×720-Koordinatensystem
+4. **`clamp()` mit Viewport-Einheiten** — gleiche Begründung
+5. **`height: 100vh`, `min-height: 100vh`, `height: 100%`** auf Elementen innerhalb von `.slide` — die Slide-Höhe ist fest 720 px
+6. **`width` oder `height` direkt auf `.slide` setzen** — wird vom Engine überschrieben
+7. **`background-attachment: fixed`** — funktioniert nicht im iframe / scaled Canvas
+
+## 🎨 HINTERGRUND-PFLICHT
+
+Der Folienhintergrund MUSS direkt auf dem `.slide`-Element definiert werden — NICHT auf einem Kind-Element:
+
+```css
+/* ✅ Korrekt */
+.slide { background: linear-gradient(135deg, #0d0d1a, #1a0533); }
+
+/* ❌ Falsch — führt zu sichtbaren Hintergrundlücken */
+.slide .bg-wrapper { background: ...; }
+```
+
+Wenn du dekorative Elemente oder Overlay-Schichten benötigst, nutze `position: absolute; inset: 0` auf dem Kind-Element und setze trotzdem den Basis-Hintergrund auf `.slide`.
+
+## 📐 SCHRIFTGRÖSSEN UND MAßE
+
+Ausschließlich `px`-Werte — der Canvas ist immer exakt 1280×720 px:
+- Hauptüberschriften: 48–80 px
+- Zwischenüberschriften: 28–42 px
+- Fließtext: 16–22 px
+- Captions/Labels: 12–15 px
 
 ## ⚠️ KEINE RÜCKFRAGEN — ABSOLUT KRITISCH
 
@@ -475,6 +542,9 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
 }
 
 function stripFramework(html) {
+  // Also strip the injected hardening <style> block so the AI never sees it
+  html = html.replace(/<style id="nexus-hardening">[\s\S]*?<\/style>/i, '');
+
   // Remove new-style marked framework
   if (html.includes(FRAMEWORK_START)) {
     const start = html.indexOf(FRAMEWORK_START);
@@ -537,6 +607,41 @@ function injectFramework(rawHtml) {
 
   // Repair truncated HTML before injecting the framework
   html = repairHtml(html);
+
+  // Inject hardening CSS right after the AI's last </style> block (before </head> or early in <body>)
+  // This runs after the AI's CSS so it wins the cascade without needing !important everywhere.
+  const HARDENING_CSS = `<style id="nexus-hardening">
+/* ── Slides.IQ hardening: wins over AI-generated CSS ── */
+#nexus-presentation { overflow: hidden !important; }
+#nexus-presentation .slide {
+  overflow-x: hidden !important; overflow-y: auto !important;
+  padding: 4rem !important; box-sizing: border-box !important;
+}
+/* Prevent any descendant from blowing out the 1280-px canvas width */
+#nexus-presentation .slide * { max-width: 100%; box-sizing: border-box; }
+/* Replaced content: never scale beyond the slide */
+#nexus-presentation .slide img,
+#nexus-presentation .slide video,
+#nexus-presentation .slide canvas,
+#nexus-presentation .slide svg   { max-width: 100% !important; height: auto; }
+/* Tables & preformatted blocks scroll rather than overflow */
+#nexus-presentation .slide table,
+#nexus-presentation .slide pre   { display: block; overflow-x: auto; max-width: 100%; }
+/* No fixed positioning inside the scaled canvas */
+#nexus-presentation .slide * { --unused: none; }
+</style>`;
+
+  // Insert hardening after the last </style> in <head>, or just before </head>
+  const headEnd = html.search(/<\/head>/i);
+  if (headEnd !== -1) {
+    html = html.slice(0, headEnd) + HARDENING_CSS + '\n' + html.slice(headEnd);
+  } else {
+    // Fallback: insert after the last </style>
+    const lastStyle = html.lastIndexOf('</style>');
+    if (lastStyle !== -1) {
+      html = html.slice(0, lastStyle + 8) + '\n' + HARDENING_CSS + html.slice(lastStyle + 8);
+    }
+  }
 
   // Inject framework before </body>
   html = html.replace(/<\/body>/i, '\n' + PRESENTATION_FRAMEWORK + '\n</body>');
