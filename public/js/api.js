@@ -101,6 +101,7 @@ export const api = {
 
   ai: {
     status: () => apiFetch('/ai/status'),
+    plan: (id, prompt, attachments = []) => apiFetch(`/ai/plan/${id}`, { method: 'POST', body: { prompt, attachments } }),
     analyze: (id) => apiFetch(`/ai/analyze/${id}`, { method: 'POST' }),
     suggest: (id, focusArea) => apiFetch(`/ai/suggest/${id}`, { method: 'POST', body: { focusArea } }),
 

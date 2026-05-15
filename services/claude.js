@@ -686,6 +686,62 @@ Antworte ausschließlich als JSON (kein Markdown):
   }
 }
 
+// ─── Plan a presentation (non-streaming, returns structured JSON) ─────────
+
+async function planPresentation({ prompt, attachments = [], existingSlideCount = 0, model, provider = 'anthropic', apiKey }) {
+  // Build context from text attachments
+  let attachmentContext = '';
+  const textAtts = attachments.filter(a => a.type === 'text');
+  if (textAtts.length > 0) {
+    attachmentContext = '\n\nAttached documents for context:\n' +
+      textAtts.map(a => `### ${a.name}\n${(a.content || '').substring(0, 2000)}`).join('\n\n---\n\n');
+  }
+  const imageAtts = attachments.filter(a => a.type === 'image');
+  if (imageAtts.length > 0) {
+    attachmentContext += `\n\n[${imageAtts.length} image attachment(s) provided]`;
+  }
+
+  const existingNote = existingSlideCount > 0
+    ? `\nThe user currently has a presentation with ${existingSlideCount} slides that they want to modify or replace.`
+    : '';
+
+  const planPrompt = `You are a concise presentation planner.${existingNote}
+
+User request: ${prompt}${attachmentContext}
+
+Respond with ONLY a JSON object — no markdown, no explanation, just the raw JSON:
+{
+  "summary": "One sentence in the user's language describing what you will create",
+  "slideCount": 8,
+  "outline": ["Slide 1 title", "Slide 2 title", "..."]
+}
+
+Rules:
+- summary must be in the same language as the user's request
+- slideCount: 6–10 for new presentations, 1–4 for small edits
+- outline must have exactly slideCount entries, concise titles only`;
+
+  const text = await aiProvider.generateText({
+    provider,
+    apiKey,
+    model,
+    messages: [{ role: 'user', content: planPrompt }],
+    systemPrompt: null,
+  });
+
+  // Extract and parse JSON from the response
+  try {
+    const jsonMatch = text.match(/\{[\s\S]+\}/);
+    const plan = JSON.parse(jsonMatch[0]);
+    if (!plan.summary || !Array.isArray(plan.outline)) throw new Error('Invalid plan shape');
+    plan.slideCount = plan.outline.length;
+    return plan;
+  } catch {
+    // Graceful fallback: return a minimal plan
+    return { summary: text.substring(0, 200), slideCount: 0, outline: [] };
+  }
+}
+
 // ─── Generate / edit a single slide ──────────────────────────────────────
 
 async function generateSingleSlide({ prompt, slideHtml = '', cssContext = '', surroundingSlides = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey, mode = 'edit' }, onChunk) {
@@ -733,6 +789,7 @@ REGELN:
 module.exports = {
   generatePresentation,
   generateSingleSlide,
+  planPresentation,
   analyzeNarrativeArc,
   suggestImprovements,
   analyzeTemplateFromPptx,

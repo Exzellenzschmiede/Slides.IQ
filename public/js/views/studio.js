@@ -654,32 +654,67 @@ function showQuestionInChat({ question, options }) {
   });
 }
 
-// ─── Main send (routes to full generation or slide-scoped edit) ───────────
+// ─── Planning helpers ─────────────────────────────────────────────────────
 
-function sendMessage() {
-  if (isGenerating) return;
-  const input = document.getElementById('chat-input');
-  const prompt = input?.value.trim();
-  if (!prompt) return;
-
-  // Route to slide-scoped edit if mode is active
-  if (slideScopedMode && slideScopedIndex >= 0) {
-    input.value = '';
-    streamEditSlide(slideScopedIndex, prompt);
-    return;
+function addThinkingMessage() {
+  const id = 'thinking-' + Date.now();
+  const messages = document.getElementById('chat-messages');
+  if (messages) {
+    messages.insertAdjacentHTML('beforeend',
+      `<div class="thinking-msg" id="${id}">
+        <div class="gen-toast-dots"><span></span><span></span><span></span></div>
+        <span>${t('studio.planning') || 'Planning…'}</span>
+      </div>`
+    );
+    messages.scrollTop = messages.scrollHeight;
   }
+  return id;
+}
 
-  const attachments = [...pendingAttachments];
-  clearAttachments();
+function removeThinkingMessage(id) {
+  document.getElementById(id)?.remove();
+}
 
-  isGenerating = true;
-  input.value = '';
-  setGeneratingUI(true, t('studio.generating'));
-
-  const attachmentLabel = attachments.length
-    ? `\n📎 ${attachments.map(a => a.name).join(', ')}`
+function showPlanInChat(plan, onConfirm) {
+  const outlineHtml = plan.outline.length
+    ? `<div class="plan-outline-label" style="margin-top:10px">📋 ${plan.slideCount} ${t('common.slides') || 'Slides'}</div>
+       <ol class="plan-outline-list">${plan.outline.map(title => `<li>${escHtml(title)}</li>`).join('')}</ol>`
     : '';
-  addChatMessage('user', prompt + attachmentLabel);
+
+  const msgId = 'plan-' + Date.now();
+  const messages = document.getElementById('chat-messages');
+  if (!messages) return;
+
+  messages.insertAdjacentHTML('beforeend', `
+    <div class="chat-message assistant" id="${msgId}">
+      <div class="plan-summary">${escHtml(plan.summary)}</div>
+      ${outlineHtml}
+      <div class="question-chips" style="margin-top:12px">
+        <button class="question-chip" style="border-color:rgba(74,222,128,0.4);background:rgba(74,222,128,0.1)" id="${msgId}-ok">✓ ${t('studio.planConfirm') || 'So erstellen'}</button>
+        <button class="question-chip" id="${msgId}-cancel">✗ ${t('common.cancel') || 'Abbrechen'}</button>
+      </div>
+    </div>
+  `);
+  messages.scrollTop = messages.scrollHeight;
+
+  document.getElementById(`${msgId}-ok`)?.addEventListener('click', () => {
+    // Disable chips to prevent double-fire
+    document.querySelectorAll(`#${msgId} button`).forEach(b => b.disabled = true);
+    onConfirm();
+  });
+
+  document.getElementById(`${msgId}-cancel`)?.addEventListener('click', () => {
+    document.getElementById(msgId)?.remove();
+    const input = document.getElementById('chat-input');
+    if (input) { input.disabled = false; input.focus(); }
+    const sendBtn = document.getElementById('send-btn');
+    if (sendBtn) sendBtn.disabled = false;
+  });
+}
+
+function startFullGeneration(prompt, attachments) {
+  isGenerating = true;
+  setGeneratingUI(true, t('studio.generating'));
   showStreamOverlay(t('studio.streamLabel'));
 
   const jobId = genManager.start({
@@ -691,6 +726,51 @@ function sendMessage() {
     apiCall: (signal) => api.ai.generate(currentPresentation.id, prompt, attachments, signal),
   });
   _watchJob(jobId);
+}
+
+// ─── Main send (routes to full generation or slide-scoped edit) ───────────
+
+async function sendMessage() {
+  if (isGenerating) return;
+  const input = document.getElementById('chat-input');
+  const prompt = input?.value.trim();
+  if (!prompt) return;
+
+  // Route to slide-scoped edit if mode is active — no planning needed
+  if (slideScopedMode && slideScopedIndex >= 0) {
+    input.value = '';
+    streamEditSlide(slideScopedIndex, prompt);
+    return;
+  }
+
+  const attachments = [...pendingAttachments];
+  clearAttachments();
+  input.value = '';
+
+  const attachmentLabel = attachments.length
+    ? `\n📎 ${attachments.map(a => a.name).join(', ')}`
+    : '';
+  addChatMessage('user', prompt + attachmentLabel);
+
+  // ── Planning phase: show plan before generating ───────────────────────
+  input.disabled = true;
+  document.getElementById('send-btn').disabled = true;
+  const thinkingId = addThinkingMessage();
+
+  try {
+    const plan = await api.ai.plan(currentPresentation.id, prompt, attachments);
+    removeThinkingMessage(thinkingId);
+    input.disabled = false;
+    document.getElementById('send-btn').disabled = false;
+
+    showPlanInChat(plan, () => startFullGeneration(prompt, attachments));
+  } catch (err) {
+    removeThinkingMessage(thinkingId);
+    input.disabled = false;
+    document.getElementById('send-btn').disabled = false;
+    // Planning failed → fall back to direct generation
+    toastError((t('studio.planError') || 'Planung fehlgeschlagen') + ': ' + err.message);
+  }
 }
 
 // ─── Generation manager event wiring ─────────────────────────────────────

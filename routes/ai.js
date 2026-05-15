@@ -3,7 +3,7 @@
 const express = require('express');
 const multer  = require('multer');
 const db = require('../database');
-const { generatePresentation, generateSingleSlide, analyzeNarrativeArc, suggestImprovements } = require('../services/claude');
+const { generatePresentation, generateSingleSlide, planPresentation, analyzeNarrativeArc, suggestImprovements } = require('../services/claude');
 const { parseSlidesFromHtml, replaceSlideInHtml, insertSlideInHtml, extractCssFromHtml } = require('../services/slideUtils');
 const { parseFile } = require('../services/fileParser');
 
@@ -264,6 +264,27 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
     console.error('Insert slide error:', err);
     send({ type: 'error', message: err.message });
     res.end();
+  }
+});
+
+// ─── Plan a presentation (non-streaming) ─────────────────────────────────
+
+router.post('/plan/:presentationId', async (req, res) => {
+  const { prompt, attachments = [] } = req.body;
+  if (!prompt) return res.status(400).json({ error: 'prompt required' });
+
+  const { provider, model, apiKey } = getProviderSettings();
+  if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
+
+  // Get current slide count for context
+  const row = db.prepare('SELECT slide_count FROM presentations WHERE id = ?').get(req.params.presentationId);
+  const existingSlideCount = row?.slide_count || 0;
+
+  try {
+    const plan = await planPresentation({ prompt, attachments, existingSlideCount, model, provider, apiKey });
+    res.json(plan);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
