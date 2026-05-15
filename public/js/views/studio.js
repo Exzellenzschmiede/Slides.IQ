@@ -728,6 +728,23 @@ function startFullGeneration(prompt, attachments) {
   _watchJob(jobId);
 }
 
+function startInsertOperation(prompt, attachments) {
+  const afterIndex = (currentPresentation.slide_count || 0) - 1;
+  isGenerating = true;
+  setGeneratingUI(true, t('studio.generating'));
+  showStreamOverlay(t('studio.streamLabel'));
+
+  const jobId = genManager.start({
+    presentationId: currentPresentation.id,
+    title: currentPresentation.title,
+    label: t('studio.generating'),
+    type: 'insert',
+    meta: { afterIndex },
+    apiCall: (signal) => api.ai.insertSlide(currentPresentation.id, afterIndex, prompt, signal),
+  });
+  _watchJob(jobId);
+}
+
 // ─── Main send (routes to full generation or slide-scoped edit) ───────────
 
 async function sendMessage() {
@@ -763,7 +780,13 @@ async function sendMessage() {
     input.disabled = false;
     document.getElementById('send-btn').disabled = false;
 
-    showPlanInChat(plan, () => startFullGeneration(prompt, attachments));
+    showPlanInChat(plan, () => {
+      if (plan.action === 'insert') {
+        startInsertOperation(prompt, attachments);
+      } else {
+        startFullGeneration(prompt, attachments);
+      }
+    });
   } catch (err) {
     removeThinkingMessage(thinkingId);
     input.disabled = false;

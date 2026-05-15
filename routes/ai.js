@@ -276,12 +276,13 @@ router.post('/plan/:presentationId', async (req, res) => {
   const { provider, model, apiKey } = getProviderSettings();
   if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
-  // Get current slide count for context
-  const row = db.prepare('SELECT slide_count FROM presentations WHERE id = ?').get(req.params.presentationId);
+  // Get current slide count and conversation history for context
+  const row = db.prepare('SELECT slide_count, conversation FROM presentations WHERE id = ?').get(req.params.presentationId);
   const existingSlideCount = row?.slide_count || 0;
+  const conversation = JSON.parse(row?.conversation || '[]');
 
   try {
-    const plan = await planPresentation({ prompt, attachments, existingSlideCount, model, provider, apiKey });
+    const plan = await planPresentation({ prompt, attachments, existingSlideCount, conversation, model, provider, apiKey });
     res.json(plan);
   } catch (err) {
     res.status(500).json({ error: err.message });
