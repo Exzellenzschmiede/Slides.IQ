@@ -420,7 +420,7 @@ Minimales Grundgerüst:
 - mix-blend-mode für künstlerische Effekte
 - CSS-Variablen für kohärentes Theming
 - box-shadow mit Color für Glow-Effekte
-- **Schriftgrößen ausschließlich in `px`** — kein `vw`, `vh`, `em`, `clamp()` mit Viewport-Einheiten
+- **Schriftgrößen ausschließlich in px** — kein vw, vh, em, clamp() mit Viewport-Einheiten
 
 ### Interaktive Elemente:
 - Hover-Effekte auf wichtigen Elementen
@@ -441,31 +441,26 @@ Format: "Kernbotschaft dieser Slide. Was betonen? Übergangssatz zur nächsten S
 
 ## 🚫 CSS-VERBOTE — NIEMALS VERWENDEN (führen zu Rendering-Fehlern)
 
-1. **`overflow: hidden`** auf `.slide` oder einem Kinder-Element — die Engine steuert Overflow
-2. **`position: fixed`** — bricht im skalierten 1280×720-Canvas vollständig
-3. **Viewport-Einheiten** (`vw`, `vh`, `dvh`, `svh`, `cqw`, `cqh`) — der Canvas ist immer 1280×720 px; nutze ausschließlich `px`-Werte oder `%` relativ zum 1280×720-Koordinatensystem
-4. **`clamp()` mit Viewport-Einheiten** — gleiche Begründung
-5. **`height: 100vh`, `min-height: 100vh`, `height: 100%`** auf Elementen innerhalb von `.slide` — die Slide-Höhe ist fest 720 px
-6. **`width` oder `height` direkt auf `.slide` setzen** — wird vom Engine überschrieben
-7. **`background-attachment: fixed`** — funktioniert nicht im iframe / scaled Canvas
+1. **overflow: hidden** auf .slide oder einem Kinder-Element — die Engine steuert Overflow
+2. **position: fixed** — bricht im skalierten 1280x720-Canvas vollständig
+3. **Viewport-Einheiten** (vw, vh, dvh, svh, cqw, cqh) — der Canvas ist immer 1280x720 px; nutze ausschließlich px-Werte oder % relativ zum 1280x720-Koordinatensystem
+4. **clamp() mit Viewport-Einheiten** — gleiche Begründung
+5. **height: 100vh, min-height: 100vh, height: 100%** auf Elementen innerhalb von .slide — die Slide-Höhe ist fest 720 px
+6. **width oder height direkt auf .slide setzen** — wird vom Engine überschrieben
+7. **background-attachment: fixed** — funktioniert nicht im iframe / scaled Canvas
 
 ## 🎨 HINTERGRUND-PFLICHT
 
-Der Folienhintergrund MUSS direkt auf dem `.slide`-Element definiert werden — NICHT auf einem Kind-Element:
+Der Folienhintergrund MUSS direkt auf dem .slide-Element definiert werden — NICHT auf einem Kind-Element:
 
-```css
-/* ✅ Korrekt */
-.slide { background: linear-gradient(135deg, #0d0d1a, #1a0533); }
+  RICHTIG:  .slide { background: linear-gradient(135deg, #0d0d1a, #1a0533); }
+  FALSCH:   .slide .bg-wrapper { background: ...; }  /* führt zu Hintergrundlücken */
 
-/* ❌ Falsch — führt zu sichtbaren Hintergrundlücken */
-.slide .bg-wrapper { background: ...; }
-```
-
-Wenn du dekorative Elemente oder Overlay-Schichten benötigst, nutze `position: absolute; inset: 0` auf dem Kind-Element und setze trotzdem den Basis-Hintergrund auf `.slide`.
+Wenn du dekorative Elemente oder Overlay-Schichten benötigst, nutze position: absolute; inset: 0 auf dem Kind-Element und setze trotzdem den Basis-Hintergrund auf .slide.
 
 ## 📐 SCHRIFTGRÖSSEN UND MAßE
 
-Ausschließlich `px`-Werte — der Canvas ist immer exakt 1280×720 px:
+Ausschließlich px-Werte — der Canvas ist immer exakt 1280x720 px:
 - Hauptüberschriften: 48–80 px
 - Zwischenüberschriften: 28–42 px
 - Fließtext: 16–22 px
