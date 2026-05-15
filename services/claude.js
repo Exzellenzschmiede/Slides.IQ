@@ -404,6 +404,10 @@ Format: "Kernbotschaft dieser Slide. Was betonen? Übergangssatz zur nächsten S
 - Typografische Hierarchie (H1 > H2 > Body)
 - Visuelle "Aha-Momente" — mindestens einer pro 3 Slides
 
+## ⚠️ KEINE RÜCKFRAGEN — ABSOLUT KRITISCH
+
+Stelle NIEMALS Rückfragen. Erzeuge IMMER die vollständige Präsentation, auch wenn der Prompt kurz oder vage ist. Triff sinnvolle kreative Annahmen. Eine Präsentation mit Platzhalter-Inhalten ist besser als eine Folie mit einer Frage. Der Nutzer kann nach der Generierung weitere Anweisungen geben.
+
 ## AUSGABE
 Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, kein Codeblock. Beginne direkt mit <!DOCTYPE html>. Deine Ausgabe MUSS mit </body></html> enden.`;
 }

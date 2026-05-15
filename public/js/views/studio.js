@@ -25,6 +25,25 @@ let _genProgressListener = null;
 let _genDoneListener = null;
 let _genErrorListener = null;
 
+// ─── Stream overlay HTML template ────────────────────────────────────────
+function streamOverlayHTML() {
+  return `<div id="stream-overlay" style="display:none;position:absolute;inset:0;z-index:5;background:rgba(10,10,20,0.93);backdrop-filter:blur(4px)">
+    <div class="stream-progress-bar"></div>
+    <div class="stream-overlay-inner">
+      <div class="stream-slide-cards" id="stream-slide-cards"></div>
+      <div class="stream-counter-wrap">
+        <span class="stream-counter-num" id="stream-slide-count">0</span>
+        <span class="stream-counter-label">Slides</span>
+      </div>
+      <div class="stream-status-row">
+        <div class="gen-toast-dots"><span></span><span></span><span></span></div>
+        <span id="stream-label" class="text-sm text-muted"></span>
+      </div>
+      <div id="stream-chars" class="font-mono text-muted" style="font-size:11px;opacity:0.45"></div>
+    </div>
+  </div>`;
+}
+
 // Job IDs whose gen-toast cards the studio is suppressing
 let _watchingJobIds = [];
 let _navAwayHandler = null;
@@ -192,14 +211,7 @@ function buildStudioHTML(p) {
             </div>`
         }
         <!-- Streaming overlay -->
-        <div id="stream-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:5">
-          <div class="stream-progress-bar"></div>
-          <div class="stream-status-badge">
-            <div class="gen-toast-dots"><span></span><span></span><span></span></div>
-            <span id="stream-label" class="text-xs text-muted"></span>
-            <span id="stream-chars" class="font-mono text-xs text-muted"></span>
-          </div>
-        </div>
+        ${streamOverlayHTML()}
       </div>
 
       <!-- Slide Navigator -->
@@ -442,15 +454,7 @@ async function refreshAfterSlideOp(slideCount, gotoIndex = 0) {
   // Rebuild preview
   const container = document.getElementById('preview-container');
   if (container) {
-    container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
-      <div id="stream-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:5">
-        <div class="stream-progress-bar"></div>
-        <div class="stream-status-badge">
-          <div class="gen-toast-dots"><span></span><span></span><span></span></div>
-          <span id="stream-label" class="text-xs text-muted"></span>
-          <span id="stream-chars" class="font-mono text-xs text-muted"></span>
-        </div>
-      </div>`;
+    container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>${streamOverlayHTML()}`;
     loadPreview();
   }
 
@@ -565,14 +569,89 @@ function showStreamOverlay(label) {
   const overlay = document.getElementById('stream-overlay');
   const labelEl = document.getElementById('stream-label');
   const charEl = document.getElementById('stream-chars');
+  const countEl = document.getElementById('stream-slide-count');
+  const cardsEl = document.getElementById('stream-slide-cards');
   if (overlay) overlay.style.display = 'block';
   if (labelEl) labelEl.textContent = label;
   if (charEl) charEl.textContent = '';
+  if (countEl) countEl.textContent = '0';
+  if (cardsEl) cardsEl.innerHTML = '';
 }
 
 function hideStreamOverlay() {
   const overlay = document.getElementById('stream-overlay');
   if (overlay) overlay.style.display = 'none';
+}
+
+function updateStreamSlideCount(count) {
+  const countEl = document.getElementById('stream-slide-count');
+  const cardsEl = document.getElementById('stream-slide-cards');
+  if (!countEl || !cardsEl) return;
+  const current = parseInt(countEl.textContent) || 0;
+  if (count === current) return;
+  countEl.textContent = String(count);
+  // Bump animation
+  countEl.classList.remove('bump');
+  requestAnimationFrame(() => countEl.classList.add('bump'));
+  // Add new slide-card thumbnails
+  const existing = cardsEl.children.length;
+  for (let i = existing; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'stream-slide-card';
+    cardsEl.appendChild(card);
+  }
+}
+
+// ─── Question-slide detection ─────────────────────────────────────────────
+
+function detectQuestionSlide(html) {
+  // Use a temporary DOM element for reliable parsing
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  const slides = temp.querySelectorAll('#nexus-presentation .slide');
+  if (slides.length !== 1) return null;
+
+  const slide = slides[0];
+  const text = slide.textContent.trim();
+  if (!text.includes('?')) return null;
+
+  // Extract the question sentence
+  const headingWithQ = [...slide.querySelectorAll('h1,h2,h3,p')].find(el => el.textContent.includes('?'));
+  const question = headingWithQ
+    ? headingWithQ.textContent.trim()
+    : (text.match(/[^.!]*\?/) || [''])[0].trim() || text.substring(0, 240);
+
+  // Extract options from list items or buttons (max 6)
+  const options = [...slide.querySelectorAll('li, button')]
+    .map(el => el.textContent.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  return { question, options };
+}
+
+function showQuestionInChat({ question, options }) {
+  const chips = options.length
+    ? `<div class="question-chips">${options.map(o =>
+        `<button class="question-chip" data-suggestion="${escHtml(o)}">${escHtml(o)}</button>`
+      ).join('')}</div>`
+    : '';
+
+  const messages = document.getElementById('chat-messages');
+  if (!messages) return;
+
+  messages.insertAdjacentHTML('beforeend',
+    `<div class="chat-message assistant"><div style="margin-bottom:${options.length ? 6 : 0}px">${escHtml(question)}</div>${chips}</div>`
+  );
+  messages.scrollTop = messages.scrollHeight;
+
+  // Wire chip clicks → fill input
+  const input = document.getElementById('chat-input');
+  messages.querySelectorAll('.question-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      if (input) { input.value = chip.dataset.suggestion; input.focus(); }
+    });
+  });
 }
 
 // ─── Main send (routes to full generation or slide-scoped edit) ───────────
@@ -622,7 +701,6 @@ function bindGenerationEvents() {
   if (_genDoneListener)     window.removeEventListener('genmanager:done',     _genDoneListener);
   if (_genErrorListener)    window.removeEventListener('genmanager:error',    _genErrorListener);
 
-  let _lastSrcdocUpdate = 0;
   _genProgressListener = (e) => {
     if (e.detail.presentationId !== currentPresentation?.id) return;
 
@@ -631,24 +709,10 @@ function bindGenerationEvents() {
       count: e.detail.chars.toLocaleString(getCurrentLocale())
     });
 
-    // Live iframe preview (throttled to 300 ms)
-    const now = Date.now();
-    if (e.detail.liveHtml && now - _lastSrcdocUpdate > 300) {
-      _lastSrcdocUpdate = now;
-      let iframe = document.getElementById('preview-iframe');
-      if (!iframe) {
-        const container = document.getElementById('preview-container');
-        const placeholder = container?.querySelector('.preview-placeholder');
-        if (placeholder) placeholder.remove();
-        if (container) {
-          iframe = document.createElement('iframe');
-          iframe.id = 'preview-iframe';
-          iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-          const overlay = document.getElementById('stream-overlay');
-          container.insertBefore(iframe, overlay);
-        }
-      }
-      if (iframe) iframe.srcdoc = e.detail.liveHtml;
+    // Count slides detected so far and update the counter + card grid
+    if (e.detail.liveHtml) {
+      const count = (e.detail.liveHtml.match(/<div class="slide"/g) || []).length;
+      updateStreamSlideCount(count);
     }
   };
 
@@ -664,18 +728,21 @@ function bindGenerationEvents() {
       currentPresentation = await api.presentations.get(currentPresentation.id);
 
       if (type === 'generate') {
+        // Check if the AI generated a question slide instead of a real presentation
+        if (currentPresentation.slide_count === 1 && currentPresentation.html_content) {
+          const questionData = detectQuestionSlide(currentPresentation.html_content);
+          if (questionData) {
+            showQuestionInChat(questionData);
+            // Don't rebuild preview — keep whatever was there before
+            document.getElementById('chat-input')?.focus();
+            return;
+          }
+        }
+
         // Rebuild full preview + navigator
         const container = document.getElementById('preview-container');
         if (container) {
-          container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
-            <div id="stream-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:5">
-              <div class="stream-progress-bar"></div>
-              <div class="stream-status-badge">
-                <div class="gen-toast-dots"><span></span><span></span><span></span></div>
-                <span id="stream-label" class="text-xs text-muted"></span>
-                <span id="stream-chars" class="font-mono text-xs text-muted"></span>
-              </div>
-            </div>`;
+          container.innerHTML = `<iframe id="preview-iframe" sandbox="allow-scripts allow-same-origin"></iframe>${streamOverlayHTML()}`;
           loadPreview();
         }
         if (!document.getElementById('slide-navigator')) {
