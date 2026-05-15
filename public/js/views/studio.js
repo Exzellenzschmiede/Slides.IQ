@@ -99,10 +99,29 @@ export async function renderStudio(container, { id }) {
 
 function buildStudioHTML(p) {
   const conversation = p.conversation || [];
-  const chatHistory = conversation
-    .filter(m => m.role === 'user')
-    .map(m => `<div class="chat-message user">${escHtml(m.content)}</div>`)
-    .join('');
+  const chatHistory = conversation.map(m => {
+    if (m.role === 'user') {
+      const text = m.display || (typeof m.content === 'string' ? m.content.substring(0, 500) : '');
+      return `<div class="chat-message user">${escHtml(text)}</div>`;
+    } else {
+      const isHtml = typeof m.content === 'string' && m.content.trim().startsWith('<');
+      const text = m.display || (isHtml ? '✓ Slides erstellt.' : (typeof m.content === 'string' ? m.content.substring(0, 200) : ''));
+      return `<div class="chat-message assistant">${escHtml(text)}</div>`;
+    }
+  }).join('');
+
+  const welcomeMsg = !conversation.length
+    ? (() => {
+        const chips = (t('studio.welcomeChips') || []);
+        const chipHtml = chips.map(c =>
+          `<button class="question-chip quick-prompt" data-prompt="${escHtml(c)}">${escHtml(c)}</button>`
+        ).join('');
+        return `<div class="chat-message assistant welcome-msg">
+          <div style="margin-bottom:${chips.length ? 10 : 0}px">${escHtml(t('studio.welcome') || 'Describe your presentation.')}</div>
+          ${chips.length ? `<div class="question-chips">${chipHtml}</div>` : ''}
+        </div>`;
+      })()
+    : '';
 
   return `
   <div class="studio-wrapper">
@@ -156,7 +175,7 @@ function buildStudioHTML(p) {
           <span class="text-xs text-muted" id="studio-model-label">Claude</span>
         </div>
         <div class="chat-messages" id="chat-messages">
-          ${chatHistory || ''}
+          ${welcomeMsg}${chatHistory}
         </div>
         <div id="generating-indicator" style="display:none">
           <div class="generating-indicator">
@@ -689,7 +708,7 @@ function showPlanInChat(plan, onConfirm) {
     <div class="chat-message assistant" id="${msgId}">
       <div class="plan-summary">${escHtml(plan.summary)}</div>
       ${outlineHtml}
-      <div class="question-chips" style="margin-top:12px">
+      <div class="question-chips" id="${msgId}-chips" style="margin-top:12px">
         <button class="question-chip" style="border-color:rgba(74,222,128,0.4);background:rgba(74,222,128,0.1)" id="${msgId}-ok">✓ ${t('studio.planConfirm') || 'So erstellen'}</button>
         <button class="question-chip" id="${msgId}-cancel">✗ ${t('common.cancel') || 'Abbrechen'}</button>
       </div>
@@ -700,7 +719,14 @@ function showPlanInChat(plan, onConfirm) {
   document.getElementById(`${msgId}-ok`)?.addEventListener('click', () => {
     // Disable chips to prevent double-fire
     document.querySelectorAll(`#${msgId} button`).forEach(b => b.disabled = true);
-    onConfirm();
+    // Replace chips with "creating" status
+    const chipsDiv = document.getElementById(`${msgId}-chips`);
+    if (chipsDiv) chipsDiv.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;opacity:0.65;font-size:12px;margin-top:4px">
+        <div class="gen-toast-dots" style="transform:scale(0.7)"><span></span><span></span><span></span></div>
+        <span>${plan.slideCount > 0 ? `${plan.slideCount} Slides — ${t('studio.planGenerating') || 'Creating…'}` : (t('studio.planGenerating') || 'Creating…')}</span>
+      </div>`;
+    onConfirm(plan);  // pass the full plan object
   });
 
   document.getElementById(`${msgId}-cancel`)?.addEventListener('click', () => {
@@ -712,7 +738,7 @@ function showPlanInChat(plan, onConfirm) {
   });
 }
 
-function startFullGeneration(prompt, attachments) {
+function startFullGeneration(prompt, attachments, plan = null) {
   isGenerating = true;
   setGeneratingUI(true, t('studio.generating'));
   showStreamOverlay(t('studio.streamLabel'));
@@ -723,12 +749,12 @@ function startFullGeneration(prompt, attachments) {
     label: t('studio.generating'),
     type: 'generate',
     meta: {},
-    apiCall: (signal) => api.ai.generate(currentPresentation.id, prompt, attachments, signal),
+    apiCall: (signal) => api.ai.generate(currentPresentation.id, prompt, attachments, signal, plan),
   });
   _watchJob(jobId);
 }
 
-function startInsertOperation(prompt, attachments) {
+function startInsertOperation(prompt, attachments, plan = null) {
   const afterIndex = (currentPresentation.slide_count || 0) - 1;
   isGenerating = true;
   setGeneratingUI(true, t('studio.generating'));
@@ -780,11 +806,11 @@ async function sendMessage() {
     input.disabled = false;
     document.getElementById('send-btn').disabled = false;
 
-    showPlanInChat(plan, () => {
-      if (plan.action === 'insert') {
-        startInsertOperation(prompt, attachments);
+    showPlanInChat(plan, (confirmedPlan) => {
+      if (confirmedPlan.action === 'insert') {
+        startInsertOperation(prompt, attachments, confirmedPlan);
       } else {
-        startFullGeneration(prompt, attachments);
+        startFullGeneration(prompt, attachments, confirmedPlan);
       }
     });
   } catch (err) {
@@ -860,19 +886,28 @@ function bindGenerationEvents() {
         buildSlideNavigator();
         document.getElementById('studio-meta').textContent =
           `${currentPresentation.slide_count} ${t('common.slides')} · ${t('studio.metaJustUpdated', { count: currentPresentation.slide_count })}`;
-        addChatMessage('assistant', t('studio.assistantCreated', { count: currentPresentation.slide_count }));
+        showAssistantWithChips(
+          t('studio.assistantCreated', { count: currentPresentation.slide_count }),
+          t('studio.postGenChips') || []
+        );
         toastSuccess(t('studio.presentationGenerated'));
         if (!document.getElementById('btn-present')) refreshStudioHeader();
 
       } else if (type === 'edit') {
         await refreshAfterSlideOp(currentPresentation.slide_count, meta.slideIndex);
-        addChatMessage('assistant', t('studio.assistantSlideUpdated', { index: meta.slideIndex + 1 }));
+        showAssistantWithChips(
+          t('studio.assistantSlideUpdated', { index: meta.slideIndex + 1 }),
+          t('studio.postInsertChips') || []
+        );
         toastSuccess(t('studio.slideUpdated', { index: meta.slideIndex + 1 }));
 
       } else if (type === 'insert') {
         const idx = newIndex ?? meta.afterIndex + 1;
         await refreshAfterSlideOp(currentPresentation.slide_count, idx);
-        addChatMessage('assistant', t('studio.assistantSlideInserted', { index: idx + 1, total: currentPresentation.slide_count }));
+        showAssistantWithChips(
+          t('studio.assistantSlideInserted', { index: idx + 1, total: currentPresentation.slide_count }),
+          t('studio.postInsertChips') || []
+        );
         toastSuccess(t('studio.slideInserted'));
       }
     } catch (err) {
@@ -935,6 +970,14 @@ function bindEvents() {
       chatInput.value = btn.dataset.prompt;
       chatInput.focus();
     });
+  });
+
+  // Delegated listener for all dynamically-added question chips with data-prompt
+  document.getElementById('chat-messages')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.question-chip[data-prompt]');
+    if (!chip || isGenerating) return;
+    const input = document.getElementById('chat-input');
+    if (input) { input.value = chip.dataset.prompt; input.focus(); }
   });
 
   // Slide mode off
@@ -1071,6 +1114,22 @@ function addChatMessage(role, text) {
   div.className = `chat-message ${role}`;
   div.textContent = text;
   messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function showAssistantWithChips(text, chips = []) {
+  const messages = document.getElementById('chat-messages');
+  if (!messages) return;
+
+  const chipHtml = chips.length
+    ? `<div class="question-chips" style="margin-top:8px">${chips.map(c =>
+        `<button class="question-chip" data-prompt="${escHtml(c)}">${escHtml(c)}</button>`
+      ).join('')}</div>`
+    : '';
+
+  messages.insertAdjacentHTML('beforeend',
+    `<div class="chat-message assistant">${escHtml(text)}${chipHtml}</div>`
+  );
   messages.scrollTop = messages.scrollHeight;
 }
 

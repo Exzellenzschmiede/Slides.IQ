@@ -117,8 +117,8 @@ export const api = {
     },
 
     // Streaming generation - returns AsyncGenerator
-    generate: async function* (presentationId, prompt, attachments = [], signal) {
-      yield* readSseStream(`${API_BASE}/ai/generate/${presentationId}`, { prompt, attachments }, signal);
+    generate: async function* (presentationId, prompt, attachments = [], signal, plan = null) {
+      yield* readSseStream(`${API_BASE}/ai/generate/${presentationId}`, { prompt, attachments, plan }, signal);
     },
 
     editSlide: async function* (presentationId, slideIndex, prompt, signal) {

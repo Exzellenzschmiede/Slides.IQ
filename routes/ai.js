@@ -58,7 +58,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 // ─── Generate / Update presentation via AI (streaming SSE) ────────────────
 
 router.post('/generate/:presentationId', async (req, res) => {
-  const { prompt, save_version = true, attachments = [] } = req.body;
+  const { prompt, save_version = true, attachments = [], plan = null } = req.body;
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
@@ -95,7 +95,7 @@ router.post('/generate/:presentationId', async (req, res) => {
     let streamedText = '';
 
     const { html: fullHtml, stopReason } = await generatePresentation(
-      { prompt, conversation, templateSystemPrompt, brand, attachments, model, provider, apiKey },
+      { prompt, plan, conversation, templateSystemPrompt, brand, attachments, model, provider, apiKey },
       (chunk) => {
         streamedText += chunk;
         send({ type: 'chunk', text: chunk });
@@ -106,18 +106,24 @@ router.post('/generate/:presentationId', async (req, res) => {
       send({ type: 'warning', message: 'Das Ausgabelimit wurde erreicht — die Präsentation wurde automatisch vervollständigt. Wähle ein leistungsfähigeres Modell oder bitte um weniger Slides für bessere Ergebnisse.' });
     }
 
+    // Count slides — only match class="slide" and class="slide active", not class="slide-content" etc.
+    const slideCount = (fullHtml.match(/class="slide(?:\s|")/g) || []).length;
+
     // Update conversation history
     const attachmentNote = attachments.length
       ? ` [Anhänge: ${attachments.map(a => a.name).join(', ')}]`
       : '';
+    const attachmentDisplay = attachments.length
+      ? ` 📎 ${attachments.map(a => a.name).join(', ')}`
+      : '';
+    const userDisplay = plan?.summary
+      ? `${prompt}${attachmentDisplay} → ${plan.summary}`
+      : `${prompt}${attachmentDisplay}`;
     const newConversation = [
       ...conversation,
-      { role: 'user', content: prompt + attachmentNote },
-      { role: 'assistant', content: fullHtml }
+      { role: 'user', content: prompt + attachmentNote, display: userDisplay },
+      { role: 'assistant', content: fullHtml, display: `✓ ${slideCount} Slide${slideCount !== 1 ? 's' : ''} erstellt.` }
     ].slice(-20); // keep last 20 messages
-
-    // Count slides — only match class="slide" and class="slide active", not class="slide-content" etc.
-    const slideCount = (fullHtml.match(/class="slide(?:\s|")/g) || []).length;
 
     // Save version if content existed
     let versions = JSON.parse(row.versions || '[]');
@@ -198,8 +204,15 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
       label: `v${versions.length + 1} — ${new Date().toLocaleString('de', { dateStyle: 'short', timeStyle: 'short' })}`
     });
 
-    db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, row.id);
+    const existingConvEdit = JSON.parse(row.conversation || '[]');
+    const newConvEdit = [
+      ...existingConvEdit,
+      { role: 'user', content: prompt, display: `[Slide ${slideIndex + 1}] ${prompt}` },
+      { role: 'assistant', content: `[Folie ${slideIndex + 1} bearbeitet]`, display: `✓ Slide ${slideIndex + 1} aktualisiert.` }
+    ].slice(-20);
+
+    db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, conversation = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, JSON.stringify(newConvEdit), row.id);
 
     send({ type: 'done', slide_count: slideCount });
     res.end();
@@ -255,8 +268,16 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
       label: `v${versions.length + 1} — ${new Date().toLocaleString('de', { dateStyle: 'short', timeStyle: 'short' })}`
     });
 
-    db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, row.id);
+    // Update conversation so history reflects the insert
+    const existingConv = JSON.parse(row.conversation || '[]');
+    const newConvInsert = [
+      ...existingConv,
+      { role: 'user', content: prompt, display: prompt },
+      { role: 'assistant', content: `[Folie nach Position ${afterIndex + 1} eingefügt]`, display: `✓ Folie ${afterIndex + 2} eingefügt (${slideCount} Slides gesamt).` }
+    ].slice(-20);
+
+    db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, conversation = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, JSON.stringify(newConvInsert), row.id);
 
     send({ type: 'done', slide_count: slideCount, new_index: afterIndex + 1 });
     res.end();

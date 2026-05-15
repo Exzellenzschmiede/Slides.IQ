@@ -476,8 +476,13 @@ Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, k
 
 // ─── Generation with streaming ────────────────────────────────────────────
 
-async function generatePresentation({ prompt, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey }, onChunk) {
+async function generatePresentation({ prompt, plan = null, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey }, onChunk) {
   const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, brand);
+
+  // If a confirmed plan outline exists, prepend it to guide generation
+  const effectivePrompt = plan?.outline?.length
+    ? `${prompt}\n\nUmzusetzendes Outline (EXAKT diese Reihenfolge und Titel einhalten):\n${plan.outline.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
+    : prompt;
 
   // Build content for the new user message.
   // For Anthropic we support vision blocks; for other providers we fall back to text.
@@ -511,10 +516,10 @@ async function generatePresentation({ prompt, conversation = [], templateSystemP
         '\n\n---\n\n## Aufgabe:\n';
     }
 
-    blocks.push({ type: 'text', text: contextPrefix + prompt });
+    blocks.push({ type: 'text', text: contextPrefix + effectivePrompt });
     userContent = blocks;
   } else {
-    userContent = prompt;
+    userContent = effectivePrompt;
   }
 
   const messages = [
