@@ -15,7 +15,6 @@ export async function renderSettings(container) {
   let settings = {};
   try { settings = await api.settings.get(); } catch {}
 
-  const brand = settings.brand || {};
   const prefs = settings.preferences || {};
 
   container.innerHTML = `
@@ -27,71 +26,6 @@ export async function renderSettings(container) {
     </div>
 
     <div class="settings-grid">
-
-      <!-- Brand Identity -->
-      <div class="settings-section">
-        <div class="settings-section-title">${t('settings.brandSection')}</div>
-      </div>
-
-      <div class="card">
-        <div class="form-group">
-          <label class="form-label">${t('settings.brandNameLabel')}</label>
-          <input type="text" class="form-input" id="brand-name" value="${brand.name || ''}" placeholder="${t('settings.brandNamePlaceholder')}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">${t('settings.primaryColorLabel')}</label>
-          <div class="flex items-center gap-8">
-            <input type="color" class="form-input" id="brand-primary" value="${brand.primaryColor || '#7c3aed'}" style="width:60px;height:42px;cursor:pointer">
-            <input type="text" class="form-input" id="brand-primary-text" value="${brand.primaryColor || '#7c3aed'}" style="font-family:var(--font-mono);width:120px">
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">${t('settings.accentColorLabel')}</label>
-          <div class="flex items-center gap-8">
-            <input type="color" class="form-input" id="brand-accent" value="${brand.accentColor || '#06b6d4'}" style="width:60px;height:42px;cursor:pointer">
-            <input type="text" class="form-input" id="brand-accent-text" value="${brand.accentColor || '#06b6d4'}" style="font-family:var(--font-mono);width:120px">
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="form-group">
-          <label class="form-label">${t('settings.fontLabel')}</label>
-          <select class="form-select" id="brand-font">
-            ${['Inter', 'Georgia', 'JetBrains Mono', 'Times New Roman', 'Arial', 'Helvetica'].map(f =>
-              `<option value="${f}" ${(brand.font || 'Inter') === f ? 'selected' : ''}>${f}</option>`
-            ).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">${t('settings.styleLabel')}</label>
-          <select class="form-select" id="brand-style">
-            ${[
-              ['modern',    t('settings.styleModern')],
-              ['corporate', t('settings.styleCorporate')],
-              ['creative',  t('settings.styleCreative')],
-              ['minimal',   t('settings.styleMinimal')],
-              ['tech',      t('settings.styleTech')]
-            ].map(([v, l]) => `<option value="${v}" ${(brand.style || 'modern') === v ? 'selected' : ''}>${l}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">${t('settings.taglineLabel')}</label>
-          <input type="text" class="form-input" id="brand-tagline" value="${brand.tagline || ''}" placeholder="${t('settings.taglinePlaceholder')}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">${t('settings.toneLabel')}</label>
-          <select class="form-select" id="brand-tone">
-            ${[
-              ['professional', t('settings.toneProfessional')],
-              ['inspiring',    t('settings.toneInspiring')],
-              ['casual',       t('settings.toneCasual')],
-              ['bold',         t('settings.toneBold')],
-              ['academic',     t('settings.toneAcademic')]
-            ].map(([v, l]) => `<option value="${v}" ${(brand.tone || 'professional') === v ? 'selected' : ''}>${l}</option>`).join('')}
-          </select>
-        </div>
-      </div>
 
       <!-- My Account -->
       <div class="settings-section">
@@ -186,15 +120,6 @@ export async function renderSettings(container) {
     try {
       await Promise.all([
         api.settings.update({
-          brand: {
-            name: document.getElementById('brand-name').value,
-            primaryColor: document.getElementById('brand-primary-text').value,
-            accentColor: document.getElementById('brand-accent-text').value,
-            font: document.getElementById('brand-font').value,
-            style: document.getElementById('brand-style').value,
-            tagline: document.getElementById('brand-tagline').value,
-            tone: document.getElementById('brand-tone').value
-          },
           preferences: {
             language: newLang,
           }
@@ -222,28 +147,9 @@ export async function renderSettings(container) {
   }
 
   // Wire up all auto-save inputs (everything except password fields)
-  const autoSaveIds = [
-    'brand-name', 'brand-primary-text', 'brand-accent-text',
-    'brand-font', 'brand-style', 'brand-tagline', 'brand-tone',
-    'profile-name', 'profile-email', 'pref-lang',
-  ];
-
-  autoSaveIds.forEach(id => {
+  ['profile-name', 'profile-email', 'pref-lang'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', scheduleSave);
     document.getElementById(id)?.addEventListener('change', scheduleSave);
-  });
-
-  // Color picker syncs + also triggers auto-save
-  ['primary', 'accent'].forEach(type => {
-    const picker = document.getElementById(`brand-${type}`);
-    const text = document.getElementById(`brand-${type}-text`);
-    picker?.addEventListener('input', () => {
-      if (text) text.value = picker.value;
-      scheduleSave();
-    });
-    text?.addEventListener('input', () => {
-      if (/^#[0-9a-f]{6}$/i.test(text.value)) picker.value = text.value;
-    });
   });
 
   // Language: save immediately + re-render so the view itself switches language

@@ -325,18 +325,27 @@ ${FRAMEWORK_END}
 
 // ─── System prompt builder ────────────────────────────────────────────────
 
-function buildSystemPrompt(templateSystemPrompt, brand) {
-  const brandSection = brand && Object.keys(brand).length > 0 ? `
-## Brand Identity (MUST BE APPLIED)
-${JSON.stringify(brand, null, 2)}
-Integriere diese Brand-Elemente konsistent in jede Präsentation.
+function buildSystemPrompt(templateSystemPrompt, templateTheme) {
+  const t = templateTheme && Object.keys(templateTheme).length > 0 ? templateTheme : null;
+  const designLines = t ? [
+    t.primaryColor && `- Primärfarbe: ${t.primaryColor}`,
+    t.accentColor  && `- Akzentfarbe: ${t.accentColor}`,
+    t.bgColor      && `- Hintergrundfarbe: ${t.bgColor}`,
+    t.font         && `- Schriftart: ${t.font}`,
+    t.style        && `- Design-Stil: ${t.style}`,
+    t.tone         && `- Ton/Stimme: ${t.tone}`,
+  ].filter(Boolean) : [];
+  const designSection = designLines.length > 0 ? `
+## Design-Parameter (MÜSSEN eingehalten werden)
+${designLines.join('\n')}
+Setze diese Parameter konsequent in allen Slides um.
 ` : '';
 
   return `Du bist Slides.IQ — ein weltklasse AI-Präsentationsarchitekt. Du erstellst atemberaubende, vollständig eigenständige HTML-Präsentationen die Kunst und Technologie verbinden.
 
 ${templateSystemPrompt}
 
-${brandSection}
+${designSection}
 
 ## ⚠️ VOLLSTÄNDIGKEIT — OBERSTE PRIORITÄT
 
@@ -476,8 +485,8 @@ Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, k
 
 // ─── Generation with streaming ────────────────────────────────────────────
 
-async function generatePresentation({ prompt, plan = null, conversation = [], templateSystemPrompt, brand, attachments = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey }, onChunk) {
-  const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, brand);
+async function generatePresentation({ prompt, plan = null, conversation = [], templateSystemPrompt, templateTheme, attachments = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey }, onChunk) {
+  const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, templateTheme);
 
   // If a confirmed plan outline exists, prepend it to guide generation
   const effectivePrompt = plan?.outline?.length

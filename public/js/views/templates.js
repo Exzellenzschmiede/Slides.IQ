@@ -10,7 +10,10 @@ const STYLE_GRADIENTS = {
   minimal:   'linear-gradient(135deg,#f8fafc,#e2e8f0)',
   neon:      'linear-gradient(135deg,#00ff8820,#ff006620)',
   corporate: 'linear-gradient(135deg,#1e3a5f20,#f59e0b20)',
-  gradient:  'linear-gradient(135deg,#f472b630,#a78bfa30)'
+  gradient:  'linear-gradient(135deg,#f472b630,#a78bfa30)',
+  modern:    'linear-gradient(135deg,#6366f130,#8b5cf620)',
+  creative:  'linear-gradient(135deg,#f59e0b30,#ec489930)',
+  tech:      'linear-gradient(135deg,#06b6d430,#10b98120)',
 };
 
 export async function renderTemplates(container) {
@@ -129,7 +132,7 @@ function renderTemplateCard(tpl) {
 }
 
 function getTemplateEmoji(style) {
-  const map = { cosmic: '✦', minimal: '◻', neon: '⚡', corporate: '◈', gradient: '◎' };
+  const map = { cosmic: '✦', minimal: '◻', neon: '⚡', corporate: '◈', gradient: '◎', modern: '◇', creative: '★', tech: '⬡' };
   return map[style] || '✦';
 }
 
@@ -147,7 +150,12 @@ function showEditModal(template, container) {
   bindTemplateForm(template, container);
 }
 
+const STYLE_OPTIONS = ['modern', 'corporate', 'creative', 'minimal', 'tech'];
+const FONT_OPTIONS  = ['Inter', 'Georgia', 'JetBrains Mono', 'Times New Roman', 'Arial', 'Helvetica'];
+const TONE_OPTIONS  = ['professional', 'inspiring', 'casual', 'bold', 'academic'];
+
 function buildTemplateForm(tpl) {
+  const theme = tpl?.theme || {};
   return `
     <div class="form-group">
       <label class="form-label">${t('templates.nameLabel')}</label>
@@ -159,16 +167,40 @@ function buildTemplateForm(tpl) {
     </div>
     <div class="form-group">
       <label class="form-label">${t('templates.promptLabel')}</label>
-      <textarea class="form-textarea" id="tpl-prompt" rows="6" placeholder="${t('templates.promptPlaceholder')}">${escHtml(tpl?.system_prompt || '')}</textarea>
+      <textarea class="form-textarea" id="tpl-prompt" rows="5" placeholder="${t('templates.promptPlaceholder')}">${escHtml(tpl?.system_prompt || '')}</textarea>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" class="form-group">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px" class="form-group">
       <div>
         <label class="form-label">${t('templates.primaryLabel')}</label>
-        <input type="color" class="form-input" id="tpl-primary" value="${tpl?.theme?.primaryColor || '#7c3aed'}" style="height:42px;cursor:pointer">
+        <input type="color" class="form-input" id="tpl-primary" value="${theme.primaryColor || '#7c3aed'}" style="height:42px;cursor:pointer;width:100%">
       </div>
       <div>
         <label class="form-label">${t('templates.accentLabel')}</label>
-        <input type="color" class="form-input" id="tpl-accent" value="${tpl?.theme?.accentColor || '#06b6d4'}" style="height:42px;cursor:pointer">
+        <input type="color" class="form-input" id="tpl-accent" value="${theme.accentColor || '#06b6d4'}" style="height:42px;cursor:pointer;width:100%">
+      </div>
+      <div>
+        <label class="form-label">${t('templates.bgLabel')}</label>
+        <input type="color" class="form-input" id="tpl-bg" value="${theme.bgColor || '#05070f'}" style="height:42px;cursor:pointer;width:100%">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px" class="form-group">
+      <div>
+        <label class="form-label">${t('templates.fontLabel')}</label>
+        <select class="form-select" id="tpl-font">
+          ${FONT_OPTIONS.map(f => `<option value="${f}" ${(theme.font || 'Inter') === f ? 'selected' : ''}>${f}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">${t('templates.styleLabel')}</label>
+        <select class="form-select" id="tpl-style">
+          ${STYLE_OPTIONS.map(s => `<option value="${s}" ${(theme.style || 'modern') === s ? 'selected' : ''}>${t('templates.style_' + s)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">${t('templates.toneLabel')}</label>
+        <select class="form-select" id="tpl-tone">
+          ${TONE_OPTIONS.map(o => `<option value="${o}" ${(theme.tone || 'professional') === o ? 'selected' : ''}>${t('templates.tone_' + o)}</option>`).join('')}
+        </select>
       </div>
     </div>
     <div class="flex gap-8" style="justify-content:flex-end;margin-top:16px">
@@ -178,16 +210,24 @@ function buildTemplateForm(tpl) {
   `;
 }
 
+function collectTheme() {
+  return {
+    primaryColor: document.getElementById('tpl-primary').value,
+    accentColor:  document.getElementById('tpl-accent').value,
+    bgColor:      document.getElementById('tpl-bg').value,
+    font:         document.getElementById('tpl-font').value,
+    style:        document.getElementById('tpl-style').value,
+    tone:         document.getElementById('tpl-tone').value,
+  };
+}
+
 function bindTemplateForm(existing, container) {
   document.getElementById('save-template-btn').addEventListener('click', async () => {
     const data = {
       name:          document.getElementById('tpl-name').value.trim(),
       description:   document.getElementById('tpl-desc').value.trim(),
       system_prompt: document.getElementById('tpl-prompt').value.trim(),
-      theme: {
-        primaryColor: document.getElementById('tpl-primary').value,
-        accentColor:  document.getElementById('tpl-accent').value
-      }
+      theme:         collectTheme(),
     };
     if (!data.name || !data.system_prompt) {
       toastError(t('templates.requiredFields'));
@@ -247,11 +287,7 @@ async function handlePptxImport(file, container) {
       name:          document.getElementById('tpl-name').value.trim(),
       description:   document.getElementById('tpl-desc').value.trim(),
       system_prompt: document.getElementById('tpl-prompt').value.trim(),
-      theme: {
-        primaryColor: document.getElementById('tpl-primary').value,
-        accentColor:  document.getElementById('tpl-accent').value,
-        style:        suggestion.theme?.style || 'corporate'
-      }
+      theme:         collectTheme(),
     };
     if (!data.name || !data.system_prompt) {
       toastError(t('templates.requiredFields'));

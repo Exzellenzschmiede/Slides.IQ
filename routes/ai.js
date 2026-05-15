@@ -67,14 +67,17 @@ router.post('/generate/:presentationId', async (req, res) => {
   const { provider, model, apiKey } = getProviderSettings();
   if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
-  // Get template system prompt
+  // Get template system prompt + theme
   let templateSystemPrompt = null;
+  let templateTheme = null;
   if (row.template_id) {
-    const template = db.prepare('SELECT system_prompt FROM templates WHERE id = ?').get(row.template_id);
-    if (template) templateSystemPrompt = template.system_prompt;
+    const template = db.prepare('SELECT system_prompt, theme FROM templates WHERE id = ?').get(row.template_id);
+    if (template) {
+      templateSystemPrompt = template.system_prompt;
+      templateTheme = JSON.parse(template.theme || '{}');
+    }
   }
 
-  const brand = JSON.parse(row.brand || '{}');
   const conversation = JSON.parse(row.conversation || '[]');
 
   // SSE headers
@@ -95,7 +98,7 @@ router.post('/generate/:presentationId', async (req, res) => {
     let streamedText = '';
 
     const { html: fullHtml, stopReason } = await generatePresentation(
-      { prompt, plan, conversation, templateSystemPrompt, brand, attachments, model, provider, apiKey },
+      { prompt, plan, conversation, templateSystemPrompt, templateTheme, attachments, model, provider, apiKey },
       (chunk) => {
         streamedText += chunk;
         send({ type: 'chunk', text: chunk });
