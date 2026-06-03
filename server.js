@@ -68,7 +68,9 @@ app.use(session({
   }
 }));
 
-app.use(express.static(path.join(__dirname, 'public')));
+// index:false so a bare GET '/' is NOT auto-served as a shell — the public
+// marketing landing owns '/', the SPA shell (app.html) is served at '/app'.
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // ─── Rate limiting ────────────────────────────────────────────────────────
 
@@ -166,11 +168,26 @@ app.get('/view/:token', (req, res) => {
   res.send(row.html_content);
 });
 
-// ─── SPA fallback ─────────────────────────────────────────────────────────
+// ─── Public marketing site ────────────────────────────────────────────────
+// '/' and '/pricing' serve the standalone marketing landing. Legal and auth
+// helper pages are added by their respective workstreams once the files exist.
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+const sendPublic = (file) => (req, res) => res.sendFile(path.join(__dirname, 'public', file));
+
+app.get('/', sendPublic('landing.html'));
+app.get('/pricing', sendPublic('landing.html'));
+// Legal pages (/impressum, /datenschutz) and email-link pages (/verify,
+// /forgot-password, /reset-password) are registered by their workstreams.
+
+// ─── Authenticated SPA shell (hash-routed) ────────────────────────────────
+
+app.get(['/app', '/app/*'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app.html'));
 });
+
+// ─── Fallback: unknown paths go to the marketing home ─────────────────────
+
+app.get('*', (req, res) => res.redirect('/'));
 
 // ─── Error handler ────────────────────────────────────────────────────────
 
