@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="Inter, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0a18"/>
+      <stop offset="1" stop-color="#05070f"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="20%" cy="15%" r="50%">
+      <stop offset="0" stop-color="#7c3aed" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="88%" cy="80%" r="45%">
+      <stop offset="0" stop-color="#06b6d4" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#06b6d4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9d5cf0"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Slide background -->
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect width="1280" height="720" fill="url(#glow1)"/>
+  <rect width="1280" height="720" fill="url(#glow2)"/>
+
+  <!-- Eyebrow tag -->
+  <g transform="translate(96,96)">
+    <rect width="232" height="38" rx="19" fill="#06b6d4" fill-opacity="0.12" stroke="#06b6d4" stroke-opacity="0.3"/>
+    <text x="22" y="25" fill="#22d3ee" font-size="16" font-weight="600" letter-spacing="1">◈  WACHSTUMSSTRATEGIE</text>
+  </g>
+
+  <!-- Headline -->
+  <text x="96" y="240" fill="#e2e8f0" font-size="76" font-weight="800" letter-spacing="-1">Q4 2026 —</text>
+  <text x="96" y="328" font-size="76" font-weight="800" letter-spacing="-1" fill="url(#grad)">Skalierung &amp; Markt</text>
+
+  <!-- Subtitle -->
+  <text x="98" y="384" fill="#e2e8f0" fill-opacity="0.55" font-size="24">Drei Hebel für nachhaltiges Wachstum im kommenden Quartal</text>
+
+  <!-- KPI cards -->
+  <g transform="translate(96,440)">
+    <g>
+      <rect width="250" height="150" rx="16" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.08"/>
+      <text x="24" y="74" fill="#22d3ee" font-size="48" font-weight="800">+42%</text>
+      <text x="24" y="110" fill="#e2e8f0" fill-opacity="0.5" font-size="17">Umsatzwachstum</text>
+    </g>
+    <g transform="translate(274,0)">
+      <rect width="250" height="150" rx="16" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.08"/>
+      <text x="24" y="74" fill="#9d5cf0" font-size="48" font-weight="800">3.1×</text>
+      <text x="24" y="110" fill="#e2e8f0" fill-opacity="0.5" font-size="17">ROI Marketing</text>
+    </g>
+    <g transform="translate(548,0)">
+      <rect width="250" height="150" rx="16" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.08"/>
+      <text x="24" y="74" fill="#22d3ee" font-size="48" font-weight="800">18k</text>
+      <text x="24" y="110" fill="#e2e8f0" fill-opacity="0.5" font-size="17">Neue Nutzer</text>
+    </g>
+  </g>
+
+  <!-- Mini bar chart -->
+  <g transform="translate(950,360)">
+    <rect x="-30" y="-40" width="270" height="290" rx="16" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.07"/>
+    <rect x="0"   y="150" width="40" height="60"  rx="6" fill="url(#bar)" opacity="0.85"/>
+    <rect x="58"  y="100" width="40" height="110" rx="6" fill="url(#bar)" opacity="0.9"/>
+    <rect x="116" y="60"  width="40" height="150" rx="6" fill="url(#bar)"/>
+    <rect x="174" y="20"  width="40" height="190" rx="6" fill="url(#bar)"/>
+    <text x="0" y="240" fill="#e2e8f0" fill-opacity="0.4" font-size="15">Q1   Q2   Q3   Q4</text>
+  </g>
+
+  <!-- Slide controls bar -->
+  <g transform="translate(0,656)">
+    <rect width="1280" height="64" fill="#000000" fill-opacity="0.35"/>
+    <rect x="96" y="30" width="1088" height="4" rx="2" fill="#ffffff" fill-opacity="0.1"/>
+    <rect x="96" y="30" width="760" height="4" rx="2" fill="url(#grad)"/>
+    <circle cx="1130" cy="32" r="5" fill="#7c3aed"/>
+    <circle cx="1150" cy="32" r="5" fill="#ffffff" fill-opacity="0.2"/>
+    <circle cx="1170" cy="32" r="5" fill="#ffffff" fill-opacity="0.2"/>
+    <text x="1095" y="37" fill="#e2e8f0" fill-opacity="0.5" font-size="15" text-anchor="end" font-family="JetBrains Mono, monospace">4 / 7</text>
+  </g>
+</svg>
