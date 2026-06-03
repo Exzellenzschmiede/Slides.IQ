@@ -185,8 +185,8 @@ app.use((err, req, res, next) => {
   try {
     const db = require('./database');
     const { injectFramework } = require('./services/claude');
-    const rows = db.prepare('SELECT id, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ""').all();
-    const update = db.prepare('UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime("now") WHERE id = ?');
+    const rows = db.prepare("SELECT id, html_content FROM presentations WHERE html_content IS NOT NULL AND html_content != ''").all();
+    const update = db.prepare("UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?");
     let count = 0;
     for (const row of rows) {
       const fixed = injectFramework(row.html_content);
