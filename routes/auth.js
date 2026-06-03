@@ -5,8 +5,13 @@ const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
 const db = require('../database');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { issueToken, consumeToken } = require('../services/tokens');
+const email = require('../services/email');
 
 const router = express.Router();
+
+// Generic, enumeration-safe response for register/forgot/resend.
+const GENERIC_OK = { ok: true, message: 'Falls die Adresse gültig ist, wurde eine E-Mail gesendet.' };
 
 // ─── Setup (first admin, only when no users exist) ────────────────────────
 
@@ -46,10 +51,103 @@ router.post('/login', async (req, res) => {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
 
+  // Gate unverified self-registered accounts (checked AFTER password so we
+  // never reveal verification status to someone without valid credentials).
+  if (user.email_verified === 0) {
+    return res.status(403).json({ error: 'Bitte bestätige zuerst deine E-Mail-Adresse.', needsVerification: true });
+  }
+
   req.session.userId = user.id;
   req.session.role = user.role;
   req.session.name = user.name;
   res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
+});
+
+// ─── Self-service registration ─────────────────────────────────────────────
+
+const VERIFY_URL = (raw) => `${email.BASE_URL}/api/auth/verify?token=${raw}`;
+const RESET_URL = (raw) => `${email.BASE_URL}/reset-password?token=${raw}`;
+
+router.post('/register', async (req, res) => {
+  const { name, email: rawEmail, password } = req.body;
+  if (!name || !rawEmail || !password) return res.status(400).json({ error: 'Name, E-Mail und Passwort erforderlich' });
+  if (password.length < 8) return res.status(400).json({ error: 'Passwort mindestens 8 Zeichen' });
+
+  // The very first account must be the admin via /setup.
+  const count = db.prepare('SELECT COUNT(*) as c FROM users').get();
+  if (count.c === 0) return res.status(403).json({ error: 'Erstes Konto muss über das Setup angelegt werden.' });
+
+  const mail = String(rawEmail).toLowerCase().trim();
+  const existing = db.prepare('SELECT id, email_verified FROM users WHERE email = ?').get(mail);
+
+  if (existing) {
+    // Enumeration-safe: same generic response. Only re-send if still unverified.
+    if (existing.email_verified === 0) {
+      const raw = issueToken(existing.id, 'verify');
+      await email.sendVerificationEmail(mail, name.trim(), VERIFY_URL(raw), req.body.locale || 'de');
+    }
+    return res.json({ ...GENERIC_OK, verificationPending: true });
+  }
+
+  const hash = await bcrypt.hash(password, 12);
+  const id = uuid();
+  db.prepare('INSERT INTO users (id, email, password_hash, name, role, email_verified) VALUES (?, ?, ?, ?, ?, 0)')
+    .run(id, mail, hash, name.trim(), 'user');
+
+  const raw = issueToken(id, 'verify');
+  await email.sendVerificationEmail(mail, name.trim(), VERIFY_URL(raw), req.body.locale || 'de');
+  res.json({ ...GENERIC_OK, verificationPending: true });
+});
+
+// ─── Verify email (clicked from email → redirect into the app) ─────────────
+
+router.get('/verify', (req, res) => {
+  const result = consumeToken(req.query.token, 'verify');
+  if (!result) return res.redirect('/app?verified=0');
+  db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(result.userId);
+  res.redirect('/app?verified=1');
+});
+
+// ─── Resend verification ───────────────────────────────────────────────────
+
+router.post('/resend-verification', async (req, res) => {
+  const mail = String(req.body.email || '').toLowerCase().trim();
+  if (mail) {
+    const user = db.prepare('SELECT id, name, email_verified FROM users WHERE email = ?').get(mail);
+    if (user && user.email_verified === 0) {
+      const raw = issueToken(user.id, 'verify');
+      await email.sendVerificationEmail(mail, user.name, VERIFY_URL(raw), req.body.locale || 'de');
+    }
+  }
+  res.json(GENERIC_OK);
+});
+
+// ─── Forgot password ───────────────────────────────────────────────────────
+
+router.post('/forgot-password', async (req, res) => {
+  const mail = String(req.body.email || '').toLowerCase().trim();
+  if (mail) {
+    const user = db.prepare('SELECT id, name, is_active FROM users WHERE email = ?').get(mail);
+    if (user && user.is_active !== 0) {
+      const raw = issueToken(user.id, 'reset');
+      await email.sendPasswordResetEmail(mail, user.name, RESET_URL(raw), req.body.locale || 'de');
+    }
+  }
+  res.json(GENERIC_OK);
+});
+
+// ─── Reset password ────────────────────────────────────────────────────────
+
+router.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Passwort mindestens 8 Zeichen' });
+  const result = consumeToken(token, 'reset');
+  if (!result) return res.status(400).json({ error: 'Link ungültig oder abgelaufen' });
+
+  const hash = await bcrypt.hash(password, 12);
+  // Clicking a reset link proves email ownership → also mark verified.
+  db.prepare('UPDATE users SET password_hash = ?, email_verified = 1 WHERE id = ?').run(hash, result.userId);
+  res.json({ ok: true });
 });
 
 // ─── Logout ───────────────────────────────────────────────────────────────

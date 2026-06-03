@@ -1824,6 +1824,13 @@ html, body {
   margin-bottom: 12px;
 }
 
+.auth-switch {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  margin-top: 16px; font-size: 13px;
+}
+.auth-switch a { color: var(--text-muted); transition: color var(--transition); }
+.auth-switch a:hover { color: var(--accent-light); }
+
 /* ─── Sidebar user / logout ── */
 .sidebar-user {
   display: flex; align-items: center; gap: 8px;

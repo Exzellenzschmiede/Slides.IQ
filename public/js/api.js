@@ -11,7 +11,11 @@ async function apiFetch(path, options = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const e = new Error(err.error || `HTTP ${res.status}`);
+    e.status = res.status;
+    e.code = err.code;
+    e.body = err;
+    throw e;
   }
 
   const contentType = res.headers.get('Content-Type') || '';
@@ -32,7 +36,11 @@ async function* readSseStream(url, body, signal) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const e = new Error(err.error || `HTTP ${res.status}`);
+    e.status = res.status;
+    e.code = err.code;
+    e.body = err;
+    throw e;
   }
 
   const reader = res.body.getReader();
@@ -146,6 +154,10 @@ export const api = {
     setupNeeded: () => apiFetch('/auth/setup-needed'),
     setup: (data) => apiFetch('/auth/setup', { method: 'POST', body: data }),
     login: (data) => apiFetch('/auth/login', { method: 'POST', body: data }),
+    register: (data) => apiFetch('/auth/register', { method: 'POST', body: data }),
+    forgotPassword: (data) => apiFetch('/auth/forgot-password', { method: 'POST', body: data }),
+    resetPassword: (data) => apiFetch('/auth/reset-password', { method: 'POST', body: data }),
+    resendVerification: (data) => apiFetch('/auth/resend-verification', { method: 'POST', body: data }),
     logout: () => apiFetch('/auth/logout', { method: 'POST' }),
     me: () => apiFetch('/auth/me'),
     updateProfile: (data) => apiFetch('/auth/me', { method: 'PUT', body: data }),

@@ -54,6 +54,13 @@ app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 
+// Fail fast in production if the session secret is missing/default.
+if (process.env.NODE_ENV === 'production' &&
+    (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'slides-iq-secret-change-me')) {
+  console.error('FATAL: SESSION_SECRET must be set to a strong unique value in production.');
+  process.exit(1);
+}
+
 const sessionDb = new Database('./data/sessions.db');
 app.use(session({
   store: new BetterSqliteStore({ client: sessionDb }),
@@ -80,8 +87,23 @@ const aiLimiter = rateLimit({
   message: { error: 'Too many AI requests. Please wait.' }
 });
 
+// Abuse protection for public auth endpoints (per-IP; trust proxy is set).
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  message: { error: 'Zu viele Versuche. Bitte später erneut versuchen.' }
+});
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 5,
+  message: { error: 'Zu viele Versuche. Bitte später erneut versuchen.' }
+});
+
 // ─── Auth Routes (public) ─────────────────────────────────────────────────
 
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', registerLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
+app.use('/api/auth/resend-verification', registerLimiter);
 app.use('/api/auth', require('./routes/auth'));
 
 // ─── Protected API Routes ─────────────────────────────────────────────────

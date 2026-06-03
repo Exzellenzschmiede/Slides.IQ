@@ -11,6 +11,7 @@ import { api } from './api.js';
 import { genManager } from './generationManager.js'; // initialises the singleton
 import { initPasswordToggles } from './utils/passwordToggle.js';
 import { setLanguage, getCurrentLocale } from './i18n.js';
+import { toastSuccess, toastError } from './components/toast.js';
 
 // ─── Register views ───────────────────────────────────────────────────────
 
@@ -44,28 +45,68 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ─── Auth Bootstrap ───────────────────────────────────────────────────────
 
+const AUTH_FORMS = {
+  login: 'auth-login-form',
+  register: 'auth-register-form',
+  forgot: 'auth-forgot-form',
+  reset: 'auth-reset-form',
+  setup: 'auth-setup-form',
+  'verify-pending': 'auth-verify-pending',
+};
+
+function showAuthForm(name) {
+  for (const [key, id] of Object.entries(AUTH_FORMS)) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = key === name ? '' : 'none';
+  }
+}
+
+// Wire the "Create account / Forgot password / Back to login" switch links once.
+function bindAuthSwitchLinks() {
+  document.querySelectorAll('[data-auth-switch]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      showAuthForm(a.getAttribute('data-auth-switch'));
+    });
+  });
+}
+
 async function initAuth() {
   const overlay = document.getElementById('auth-overlay');
-  const loginForm = document.getElementById('auth-login-form');
-  const setupForm = document.getElementById('auth-setup-form');
+  bindAuthSwitchLinks();
 
-  // Check if first-run setup is needed
+  const params = new URLSearchParams(location.search);
+
+  // Email-verification result (redirected here by the verify endpoint).
+  if (params.has('verified')) {
+    if (params.get('verified') === '1') toastSuccess('E-Mail bestätigt. Du kannst dich jetzt anmelden.');
+    else toastError('Bestätigungslink ungültig oder abgelaufen.');
+    history.replaceState(null, '', '/app');
+  }
+
+  // Password-reset link (token in URL) → reset form, regardless of auth state.
+  const resetToken = params.get('token');
+  if (location.pathname.includes('reset-password') || (resetToken && params.get('flow') === 'reset')) {
+    overlay.classList.remove('hidden');
+    showAuthForm('reset');
+    await waitForReset(resetToken);
+    overlay.classList.add('hidden');
+    history.replaceState(null, '', '/app');
+    // fall through to login after a successful reset
+  }
+
+  // First-run setup?
   let setupNeeded = false;
-  try {
-    const res = await api.auth.setupNeeded();
-    setupNeeded = res.setupNeeded;
-  } catch {}
-
+  try { setupNeeded = (await api.auth.setupNeeded()).setupNeeded; } catch {}
   if (setupNeeded) {
-    loginForm.style.display = 'none';
-    setupForm.style.display = '';
+    showAuthForm('setup');
     overlay.classList.remove('hidden');
     await waitForSetup();
     overlay.classList.add('hidden');
     return;
   }
 
-  // Check if already logged in
+  // Already logged in?
   try {
     const user = await api.auth.me();
     await setCurrentUser(user);
@@ -74,11 +115,99 @@ async function initAuth() {
     return;
   } catch {}
 
-  // Show login
+  // Entry mode from the landing deep-links (?mode=register&plan=…).
+  const mode = params.get('mode') === 'register' ? 'register' : 'login';
+  if (params.get('plan')) sessionStorage.setItem('intendedPlan', params.get('plan'));
+
   overlay.classList.remove('hidden');
+  showAuthForm(mode);
+  // Run both waiters; whichever completes (login or register→verify→login) resolves.
+  bindRegister();
+  bindForgot();
   await waitForLogin();
   overlay.classList.add('hidden');
   checkApiStatus();
+}
+
+function bindRegister() {
+  const btn = document.getElementById('auth-register-btn');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  const nameEl = document.getElementById('register-name');
+  const emailEl = document.getElementById('register-email');
+  const passEl = document.getElementById('register-password');
+  const errEl = document.getElementById('register-error');
+  async function tryRegister() {
+    errEl.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Konto wird erstellt…';
+    try {
+      await api.auth.register({ name: nameEl.value.trim(), email: emailEl.value.trim(), password: passEl.value, locale: getCurrentLocale?.() || 'de' });
+      const txt = document.getElementById('verify-pending-text');
+      if (txt) txt.textContent = `Wir haben eine Bestätigungs-E-Mail an ${emailEl.value.trim()} geschickt. Bitte klicke auf den Link darin.`;
+      sessionStorage.setItem('pendingVerifyEmail', emailEl.value.trim());
+      showAuthForm('verify-pending');
+    } catch (err) {
+      errEl.textContent = err.message; errEl.style.display = '';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Konto erstellen';
+    }
+  }
+  btn.addEventListener('click', tryRegister);
+  [nameEl, emailEl, passEl].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') tryRegister(); }));
+
+  const resendBtn = document.getElementById('auth-resend-btn');
+  resendBtn?.addEventListener('click', async () => {
+    resendBtn.disabled = true;
+    try { await api.auth.resendVerification({ email: sessionStorage.getItem('pendingVerifyEmail') || emailEl.value.trim(), locale: getCurrentLocale?.() || 'de' }); toastSuccess('E-Mail erneut gesendet.'); }
+    catch (e) { toastError(e.message); }
+    finally { resendBtn.disabled = false; }
+  });
+}
+
+function bindForgot() {
+  const btn = document.getElementById('auth-forgot-btn');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  const emailEl = document.getElementById('forgot-email');
+  const errEl = document.getElementById('forgot-error');
+  const infoEl = document.getElementById('forgot-info');
+  async function tryForgot() {
+    errEl.style.display = 'none'; infoEl.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Wird gesendet…';
+    try {
+      await api.auth.forgotPassword({ email: emailEl.value.trim(), locale: getCurrentLocale?.() || 'de' });
+      infoEl.textContent = 'Falls die Adresse gültig ist, wurde ein Link gesendet.';
+      infoEl.style.display = '';
+    } catch (err) {
+      errEl.textContent = err.message; errEl.style.display = '';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Link senden';
+    }
+  }
+  btn.addEventListener('click', tryForgot);
+  emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') tryForgot(); });
+}
+
+function waitForReset(token) {
+  return new Promise((resolve) => {
+    const btn = document.getElementById('auth-reset-btn');
+    const passEl = document.getElementById('reset-password');
+    const errEl = document.getElementById('reset-error');
+    async function tryReset() {
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Wird gespeichert…';
+      try {
+        await api.auth.resetPassword({ token, password: passEl.value });
+        toastSuccess('Passwort gesetzt. Bitte melde dich an.');
+        resolve();
+      } catch (err) {
+        errEl.textContent = err.message; errEl.style.display = '';
+        btn.disabled = false; btn.textContent = 'Passwort setzen';
+      }
+    }
+    btn.addEventListener('click', tryReset);
+    passEl.addEventListener('keydown', e => { if (e.key === 'Enter') tryReset(); });
+  });
 }
 
 function waitForLogin() {
