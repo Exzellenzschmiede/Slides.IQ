@@ -370,6 +370,14 @@ const LOCALES = {
       heroNote: 'No credit card required · First slide in 60 seconds',
       madeInGermany: 'Made in Germany',
       madeInGermanyNote: '🇩🇪 Built & hosted in Germany — GDPR-compliant',
+      explainer: {
+        step1: '1 · Describe', step2: '2 · Confirm', step3: '3 · Present',
+        prompt: '"Create a pitch deck about our growth strategy"',
+        s1: 'Market & opportunity', s2: 'Our product', s3: 'Growth & numbers', s4: 'Call to action',
+        confirm: '✓ Build it',
+        revolutionHtml: 'The <span class="grad">revolution</span>',
+        revSub: 'One idea. One sentence. A finished deck.',
+      },
       featuresTitle: 'Why Slides.IQ',
       featuresSub: 'From idea to finished presentation — guided, fast, and playable anywhere.',
       features: [
@@ -795,6 +803,14 @@ const LOCALES = {
       heroNote: 'Keine Kreditkarte nötig · In 60 Sekunden zur ersten Folie',
       madeInGermany: 'Made in Germany',
       madeInGermanyNote: '🇩🇪 Entwickelt & gehostet in Deutschland — DSGVO-konform',
+      explainer: {
+        step1: '1 · Beschreiben', step2: '2 · Bestätigen', step3: '3 · Präsentieren',
+        prompt: '„Erstelle ein Pitch-Deck zu unserer Wachstumsstrategie"',
+        s1: 'Markt & Chance', s2: 'Unser Produkt', s3: 'Wachstum & Zahlen', s4: 'Call to Action',
+        confirm: '✓ So erstellen',
+        revolutionHtml: 'Die <span class="grad">Revolution</span>',
+        revSub: 'Eine Idee. Ein Satz. Eine fertige Präsentation.',
+      },
       featuresTitle: 'Warum Slides.IQ',
       featuresSub: 'Von der Idee zur fertigen Präsentation — geführt, schnell und überall abspielbar.',
       features: [
@@ -1217,6 +1233,14 @@ const LOCALES = {
       heroNote: 'Nessuna carta di credito · Prima slide in 60 secondi',
       madeInGermany: 'Made in Germany',
       madeInGermanyNote: '🇩🇪 Sviluppato e ospitato in Germania — conforme al GDPR',
+      explainer: {
+        step1: '1 · Descrivi', step2: '2 · Conferma', step3: '3 · Presenta',
+        prompt: '"Crea un pitch deck sulla nostra strategia di crescita"',
+        s1: 'Mercato e opportunità', s2: 'Il nostro prodotto', s3: 'Crescita e numeri', s4: 'Call to action',
+        confirm: '✓ Crea così',
+        revolutionHtml: 'La <span class="grad">rivoluzione</span>',
+        revSub: 'Un\'idea. Una frase. Una presentazione pronta.',
+      },
       featuresTitle: 'Perché Slides.IQ',
       featuresSub: 'Dall\'idea alla presentazione finita — guidato, veloce e riproducibile ovunque.',
       features: [
@@ -1627,6 +1651,14 @@ const LOCALES = {
       heroNote: 'Geen creditcard nodig · Eerste slide in 60 seconden',
       madeInGermany: 'Made in Germany',
       madeInGermanyNote: '🇩🇪 Ontwikkeld & gehost in Duitsland — AVG-conform',
+      explainer: {
+        step1: '1 · Beschrijf', step2: '2 · Bevestig', step3: '3 · Presenteer',
+        prompt: '"Maak een pitchdeck over onze groeistrategie"',
+        s1: 'Markt & kans', s2: 'Ons product', s3: 'Groei & cijfers', s4: 'Call to action',
+        confirm: '✓ Zo aanmaken',
+        revolutionHtml: 'De <span class="grad">revolutie</span>',
+        revSub: 'Eén idee. Eén zin. Een kant-en-klare presentatie.',
+      },
       featuresTitle: 'Waarom Slides.IQ',
       featuresSub: 'Van idee tot kant-en-klare presentatie — begeleid, snel en overal af te spelen.',
       features: [
@@ -2037,6 +2069,14 @@ const LOCALES = {
       heroNote: 'Bez karty kredytowej · Pierwszy slajd w 60 sekund',
       madeInGermany: 'Made in Germany',
       madeInGermanyNote: '🇩🇪 Stworzone i hostowane w Niemczech — zgodne z RODO',
+      explainer: {
+        step1: '1 · Opisz', step2: '2 · Zatwierdź', step3: '3 · Prezentuj',
+        prompt: '„Stwórz pitch deck o naszej strategii wzrostu"',
+        s1: 'Rynek i szansa', s2: 'Nasz produkt', s3: 'Wzrost i liczby', s4: 'Wezwanie do działania',
+        confirm: '✓ Utwórz tak',
+        revolutionHtml: '<span class="grad">Rewolucja</span>',
+        revSub: 'Jeden pomysł. Jedno zdanie. Gotowa prezentacja.',
+      },
       featuresTitle: 'Dlaczego Slides.IQ',
       featuresSub: 'Od pomysłu do gotowej prezentacji — prowadzone, szybkie i odtwarzalne wszędzie.',
       features: [

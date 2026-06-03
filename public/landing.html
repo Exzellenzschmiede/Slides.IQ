@@ -54,8 +54,54 @@
       </div>
       <div class="hero-note" data-i18n="landing.heroNote">Keine Kreditkarte nötig</div>
       <div class="mig-strip" data-i18n="landing.madeInGermanyNote">🇩🇪 Entwickelt & gehostet in Deutschland — DSGVO-konform</div>
-      <div class="hero-mock">
-        <img src="/landing/hero-preview.svg" alt="Slides.IQ Präsentations-Vorschau" loading="lazy" width="1280" height="720">
+      <!-- Animated explainer (looping, lightweight CSS — no video file) -->
+      <div class="explainer" role="img" aria-label="Slides.IQ: beschreiben, bestätigen, präsentieren">
+        <div class="ex-window">
+          <div class="ex-bar"><span class="ex-dot"></span><span class="ex-dot"></span><span class="ex-dot"></span><span class="ex-url">slides.iq/app</span></div>
+          <div class="ex-screen">
+
+            <!-- Scene 1: Describe -->
+            <div class="ex-scene ex-s1">
+              <div class="ex-step" data-i18n="landing.explainer.step1">1 · Beschreiben</div>
+              <div class="ex-chat">
+                <div class="ex-msg"><span data-i18n="landing.explainer.prompt">„Erstelle ein Pitch-Deck …"</span><i class="ex-caret"></i></div>
+              </div>
+            </div>
+
+            <!-- Scene 2: Confirm outline -->
+            <div class="ex-scene ex-s2">
+              <div class="ex-step" data-i18n="landing.explainer.step2">2 · Bestätigen</div>
+              <div class="ex-outline">
+                <div class="ex-ol"><i>1</i><b data-i18n="landing.explainer.s1">Markt & Chance</b></div>
+                <div class="ex-ol"><i>2</i><b data-i18n="landing.explainer.s2">Unser Produkt</b></div>
+                <div class="ex-ol"><i>3</i><b data-i18n="landing.explainer.s3">Wachstum & Zahlen</b></div>
+                <div class="ex-ol"><i>4</i><b data-i18n="landing.explainer.s4">Call to Action</b></div>
+              </div>
+              <div class="ex-confirm" data-i18n="landing.explainer.confirm">✓ So erstellen</div>
+            </div>
+
+            <!-- Scene 3: Present -->
+            <div class="ex-scene ex-s3">
+              <div class="ex-step" data-i18n="landing.explainer.step3">3 · Präsentieren</div>
+              <div class="ex-slide">
+                <div class="ex-slide-tag">◈ WACHSTUM</div>
+                <div class="ex-slide-h">Q4 2026 — Skalierung</div>
+                <div class="ex-kpis"><span>+42%</span><span>3.1×</span><span>18k</span></div>
+                <div class="ex-prog"><i></i></div>
+              </div>
+            </div>
+
+            <!-- Scene 4: Revolution -->
+            <div class="ex-scene ex-s4">
+              <div class="ex-rev">
+                <div class="ex-strike">PowerPoint</div>
+                <div class="ex-rev-title" data-i18n-html="landing.explainer.revolutionHtml">Die <span class="grad">Revolution</span></div>
+                <div class="ex-rev-sub" data-i18n="landing.explainer.revSub">Eine Idee. Ein Satz. Eine fertige Präsentation.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
     </div>
   </section>

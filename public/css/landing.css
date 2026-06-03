@@ -111,7 +111,7 @@ img { max-width: 100%; display: block; }
   font-size: clamp(36px, 6vw, 66px); line-height: 1.05; font-weight: 800; letter-spacing: -0.02em;
   margin-bottom: 22px;
 }
-.hero h1 .grad {
+.grad {
   background: linear-gradient(120deg, var(--primary-light), var(--accent-light));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
@@ -119,13 +119,125 @@ img { max-width: 100%; display: block; }
 .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
 .hero-note { margin-top: 16px; font-size: 13px; color: var(--text-dim); }
 
-.hero-mock {
-  margin: 56px auto 0; max-width: 940px;
+/* ─── Animated explainer (looping CSS "video") ────────────────────────── */
+.explainer { margin: 56px auto 0; max-width: 880px; }
+.ex-window {
   border-radius: var(--radius-xl); border: 1px solid var(--border-hover);
   box-shadow: 0 30px 90px rgba(0,0,0,0.65), 0 0 0 1px rgba(124,58,237,0.12);
-  overflow: hidden; line-height: 0;
+  overflow: hidden; background: #0a0c16;
 }
-.hero-mock img { width: 100%; height: auto; display: block; }
+.ex-bar {
+  display: flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px;
+  background: rgba(0,0,0,0.4); border-bottom: 1px solid var(--border);
+}
+.ex-dot { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+.ex-dot:nth-child(1) { background: #ff5f57; } .ex-dot:nth-child(2) { background: #febc2e; } .ex-dot:nth-child(3) { background: #28c840; }
+.ex-url {
+  margin-left: 14px; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
+  background: rgba(255,255,255,0.05); padding: 3px 12px; border-radius: 999px;
+}
+.ex-screen {
+  position: relative; aspect-ratio: 16/9;
+  background:
+    radial-gradient(60% 60% at 25% 10%, rgba(124,58,237,0.18), transparent 70%),
+    radial-gradient(50% 50% at 90% 90%, rgba(6,182,212,0.14), transparent 70%),
+    #070912;
+}
+
+/* Scenes cross-fade on a shared 16s loop (4 × ~4s), staggered by delay */
+.ex-scene {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px; padding: 56px 6% 24px;
+  opacity: 0; animation: exCycle 16s infinite;
+}
+.ex-s1 { animation-delay: 0s; }
+.ex-s2 { animation-delay: 4s; }
+.ex-s3 { animation-delay: 8s; }
+.ex-s4 { animation-delay: 12s; }
+@keyframes exCycle {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.99); }
+  4%   { opacity: 1; transform: none; }
+  22%  { opacity: 1; transform: none; }
+  26%  { opacity: 0; transform: translateY(-8px) scale(0.99); }
+  100% { opacity: 0; }
+}
+
+.ex-step {
+  position: absolute; top: 16px; left: 20px;
+  font-size: clamp(11px, 1.6vw, 13px); font-weight: 600; letter-spacing: 0.04em;
+  color: var(--accent-light); background: rgba(6,182,212,0.1);
+  border: 1px solid rgba(6,182,212,0.25); padding: 4px 12px; border-radius: 999px;
+}
+
+/* Scene 1 — chat prompt */
+.ex-chat { width: 86%; max-width: 560px; }
+.ex-msg {
+  background: linear-gradient(135deg, rgba(124,58,237,0.22), rgba(6,182,212,0.16));
+  border: 1px solid var(--border-hover); border-radius: 16px 16px 16px 4px;
+  padding: clamp(14px, 2.4vw, 22px); font-size: clamp(15px, 2.6vw, 22px);
+  font-weight: 600; color: #fff; line-height: 1.4;
+}
+.ex-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 3px;
+  background: var(--accent-light); vertical-align: text-bottom; animation: exBlink 1s steps(1) infinite; }
+@keyframes exBlink { 50% { opacity: 0; } }
+
+/* Scene 2 — outline + confirm */
+.ex-outline { width: 80%; max-width: 520px; display: flex; flex-direction: column; gap: clamp(7px, 1.4vw, 11px); }
+.ex-ol {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-left: 3px solid var(--primary); border-radius: 10px;
+  padding: clamp(8px, 1.6vw, 12px) 14px; font-size: clamp(13px, 2vw, 17px); color: var(--text);
+}
+.ex-ol i { font-style: normal; width: 22px; height: 22px; flex: none; border-radius: 6px;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  background: rgba(124,58,237,0.25); color: #c4b5fd; }
+.ex-ol b { font-weight: 600; }
+.ex-confirm {
+  font-size: clamp(13px, 2vw, 16px); font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  padding: 10px 22px; border-radius: 12px; animation: exPulse 1.6s ease-out infinite;
+}
+@keyframes exPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.5); }
+  50% { box-shadow: 0 0 0 10px rgba(124,58,237,0); }
+}
+
+/* Scene 3 — rendered slide */
+.ex-slide {
+  width: 84%; max-width: 600px; aspect-ratio: 16/9; border-radius: 14px;
+  border: 1px solid var(--border-hover); padding: clamp(16px, 3vw, 30px);
+  background: radial-gradient(70% 70% at 20% 10%, rgba(124,58,237,0.25), transparent 70%), #0a0a18;
+  display: flex; flex-direction: column; justify-content: center; gap: clamp(8px, 1.6vw, 14px);
+  position: relative; overflow: hidden;
+}
+.ex-slide-tag { font-size: clamp(10px, 1.5vw, 13px); font-weight: 700; letter-spacing: 0.1em; color: var(--accent-light); }
+.ex-slide-h { font-size: clamp(20px, 4vw, 38px); font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+.ex-kpis { display: flex; gap: clamp(12px, 3vw, 28px); }
+.ex-kpis span { font-size: clamp(20px, 4vw, 40px); font-weight: 800;
+  background: linear-gradient(120deg, var(--primary-light), var(--accent-light));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ex-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,0.08); }
+.ex-prog i { display: block; height: 100%; width: 8%;
+  background: linear-gradient(90deg, var(--primary), var(--accent)); animation: exProg 4s ease-in-out infinite; }
+@keyframes exProg { 0% { width: 6%; } 80%, 100% { width: 94%; } }
+
+/* Scene 4 — the revolution punch */
+.ex-rev { text-align: center; }
+.ex-strike { display: inline-block; position: relative; font-size: clamp(18px, 3.4vw, 30px);
+  font-weight: 700; color: var(--text-muted); }
+.ex-strike::after { content: ''; position: absolute; left: -4%; top: 52%; height: 3px; width: 0;
+  background: var(--danger); border-radius: 2px; animation: exStrike 16s infinite; animation-delay: 12s; }
+@keyframes exStrike { 0% { width: 0; } 8% { width: 108%; } 24% { width: 108%; } 28% { width: 0; } 100% { width: 0; } }
+.ex-rev-title { font-size: clamp(28px, 6vw, 58px); font-weight: 800; letter-spacing: -0.02em; color: #fff; margin-top: 6px; }
+.ex-rev-sub { font-size: clamp(13px, 2.2vw, 18px); color: var(--text-muted); margin-top: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ex-scene { animation: none; opacity: 0; }
+  .ex-s4 { opacity: 1; }
+  .ex-caret, .ex-confirm, .ex-prog i, .ex-strike::after { animation: none; }
+  .ex-strike::after { width: 108%; }
+}
 
 /* Made-in-Germany badges */
 .mig-badge {
