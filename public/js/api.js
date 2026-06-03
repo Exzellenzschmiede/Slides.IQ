@@ -101,7 +101,7 @@ export const api = {
 
   ai: {
     status: () => apiFetch('/ai/status'),
-    plan: (id, prompt, attachments = []) => apiFetch(`/ai/plan/${id}`, { method: 'POST', body: { prompt, attachments } }),
+    plan: (id, prompt, attachments = [], previousPlan = null) => apiFetch(`/ai/plan/${id}`, { method: 'POST', body: { prompt, attachments, previousPlan } }),
     analyze: (id) => apiFetch(`/ai/analyze/${id}`, { method: 'POST' }),
     suggest: (id, focusArea) => apiFetch(`/ai/suggest/${id}`, { method: 'POST', body: { focusArea } }),
 
@@ -125,8 +125,8 @@ export const api = {
       yield* readSseStream(`${API_BASE}/ai/edit-slide/${presentationId}`, { slideIndex, prompt }, signal);
     },
 
-    insertSlide: async function* (presentationId, afterIndex, prompt, signal) {
-      yield* readSseStream(`${API_BASE}/ai/insert-slide/${presentationId}`, { afterIndex, prompt }, signal);
+    insertSlide: async function* (presentationId, afterIndex, prompt, signal, plan = null) {
+      yield* readSseStream(`${API_BASE}/ai/insert-slide/${presentationId}`, { afterIndex, prompt, plan }, signal);
     }
   },
 

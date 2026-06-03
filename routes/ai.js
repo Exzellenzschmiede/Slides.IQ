@@ -229,7 +229,7 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
 // ─── Insert a new slide via AI (streaming SSE) ────────────────────────────
 
 router.post('/insert-slide/:presentationId', async (req, res) => {
-  const { prompt, afterIndex } = req.body;
+  const { prompt, afterIndex, plan = null } = req.body;
   if (!prompt || afterIndex === undefined) return res.status(400).json({ error: 'prompt and afterIndex required' });
 
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.presentationId);
@@ -238,11 +238,22 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
   const { provider, model, apiKey } = getProviderSettings();
   if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
-  const slides = parseSlidesFromHtml(row.html_content);
   const cssContext = extractCssFromHtml(row.html_content);
-  const surroundingSlides = slides
-    .filter((_, i) => Math.abs(i - afterIndex) <= 2)
-    .map(s => s.html);
+
+  // Build the list of slides to insert. With a confirmed outline we insert one
+  // slide per outline entry (each gets its own title/type/points spec); without
+  // one we fall back to a single slide from the raw prompt.
+  const outline = Array.isArray(plan?.outline) ? plan.outline : [];
+  const specs = outline.length
+    ? outline.map(item => {
+        if (typeof item === 'string') return item;
+        const type = item.type ? `[${item.type}] ` : '';
+        const pts = Array.isArray(item.points) && item.points.length
+          ? '\nInhalt:\n' + item.points.map(p => `- ${p}`).join('\n')
+          : '';
+        return `${type}${item.title || ''}${pts}`;
+      })
+    : [prompt];
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -255,13 +266,28 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
   try {
     send({ type: 'start' });
 
-    const { slideHtml } = await generateSingleSlide(
-      { prompt, slideHtml: '', cssContext, surroundingSlides, model, provider, apiKey, mode: 'insert' },
-      (chunk) => send({ type: 'chunk', text: chunk })
-    );
+    let html = row.html_content;
+    let insertAt = afterIndex;
 
-    const newHtml = insertSlideInHtml(row.html_content, afterIndex, slideHtml);
-    const slideCount = (newHtml.match(/class="slide(?:\s|")/g) || []).length;
+    for (let s = 0; s < specs.length; s++) {
+      const slides = parseSlidesFromHtml(html);
+      const surroundingSlides = slides
+        .filter((_, i) => Math.abs(i - insertAt) <= 2)
+        .map(sl => sl.html);
+
+      if (specs.length > 1) send({ type: 'chunk', text: `\n\n— Folie ${s + 1}/${specs.length} —\n` });
+
+      const { slideHtml } = await generateSingleSlide(
+        { prompt: specs[s], slideHtml: '', cssContext, surroundingSlides, model, provider, apiKey, mode: 'insert' },
+        (chunk) => send({ type: 'chunk', text: chunk })
+      );
+
+      html = insertSlideInHtml(html, insertAt, slideHtml);
+      insertAt += 1; // next slide goes right after the one just inserted
+    }
+
+    const slideCount = (html.match(/class="slide(?:\s|")/g) || []).length;
+    const inserted = specs.length;
 
     let versions = JSON.parse(row.versions || '[]');
     versions.unshift({
@@ -276,11 +302,11 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
     const newConvInsert = [
       ...existingConv,
       { role: 'user', content: prompt, display: prompt },
-      { role: 'assistant', content: `[Folie nach Position ${afterIndex + 1} eingefügt]`, display: `✓ Folie ${afterIndex + 2} eingefügt (${slideCount} Slides gesamt).` }
+      { role: 'assistant', content: `[${inserted} Folie(n) nach Position ${afterIndex + 1} eingefügt]`, display: `✓ ${inserted} Folie(n) eingefügt (${slideCount} Slides gesamt).` }
     ].slice(-20);
 
     db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, conversation = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, JSON.stringify(newConvInsert), row.id);
+      .run(html, JSON.stringify(versions.slice(0, 20)), slideCount, JSON.stringify(newConvInsert), row.id);
 
     send({ type: 'done', slide_count: slideCount, new_index: afterIndex + 1 });
     res.end();
@@ -294,7 +320,7 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
 // ─── Plan a presentation (non-streaming) ─────────────────────────────────
 
 router.post('/plan/:presentationId', async (req, res) => {
-  const { prompt, attachments = [] } = req.body;
+  const { prompt, attachments = [], previousPlan = null } = req.body;
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   const { provider, model, apiKey } = getProviderSettings();
@@ -306,7 +332,7 @@ router.post('/plan/:presentationId', async (req, res) => {
   const conversation = JSON.parse(row?.conversation || '[]');
 
   try {
-    const plan = await planPresentation({ prompt, attachments, existingSlideCount, conversation, model, provider, apiKey });
+    const plan = await planPresentation({ prompt, attachments, existingSlideCount, conversation, previousPlan, model, provider, apiKey });
     res.json(plan);
   } catch (err) {
     res.status(500).json({ error: err.message });

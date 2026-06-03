@@ -17,6 +17,10 @@ let presenterHeartbeat = null;    // re-sends current slide so late joiners sync
 let presenterSlideIndex = 0;      // last slide index shown in presenter iframe
 let pendingAttachments = []; // [{type, name, content?, data?, mediaType?}]
 
+// Plan-review state: holds the proposed-but-unconfirmed outline while the user
+// refines it (via chat or inline editing) before slides are generated.
+let pendingPlan = null; // { plan, prompt, attachments }
+
 // Slide navigator state
 let currentSlideIndex = 0;
 let slideScopedMode = false;
@@ -82,6 +86,7 @@ export async function renderStudio(container, { id }) {
   currentSlideIndex = 0;
   slideScopedMode = false;
   slideScopedIndex = -1;
+  pendingPlan = null;
   messageListenerActive = false;
   _watchingJobIds = [];
   if (_navAwayHandler) {
@@ -415,6 +420,8 @@ function handleSlideAction(index, action) {
 function activateSlideScopedMode(index) {
   slideScopedMode = true;
   slideScopedIndex = index;
+  // A pending outline proposal is irrelevant in per-slide edit mode — clear it.
+  if (pendingPlan) { pendingPlan = null; document.getElementById('plan-card')?.remove(); }
 
   const banner = document.getElementById('slide-mode-banner');
   const label = document.getElementById('slide-mode-label');
@@ -682,14 +689,14 @@ function showQuestionInChat({ question, options }) {
 
 // ─── Planning helpers ─────────────────────────────────────────────────────
 
-function addThinkingMessage() {
+function addThinkingMessage(label) {
   const id = 'thinking-' + Date.now();
   const messages = document.getElementById('chat-messages');
   if (messages) {
     messages.insertAdjacentHTML('beforeend',
       `<div class="thinking-msg" id="${id}">
         <div class="gen-toast-dots"><span></span><span></span><span></span></div>
-        <span>${t('studio.planning') || 'Planning…'}</span>
+        <span>${escHtml(label || t('studio.planning') || 'Planning…')}</span>
       </div>`
     );
     messages.scrollTop = messages.scrollHeight;
@@ -701,48 +708,163 @@ function removeThinkingMessage(id) {
   document.getElementById(id)?.remove();
 }
 
-function showPlanInChat(plan, onConfirm) {
-  const outlineHtml = plan.outline.length
-    ? `<div class="plan-outline-label" style="margin-top:10px">📋 ${plan.slideCount} ${t('common.slides') || 'Slides'}</div>
-       <ol class="plan-outline-list">${plan.outline.map(title => `<li>${escHtml(title)}</li>`).join('')}</ol>`
-    : '';
+// ─── Plan review card (editable outline + confirm) ────────────────────────
 
-  const msgId = 'plan-' + Date.now();
+const SLIDE_TYPE_META = {
+  intro:      { icon: '🚀', label: 'Intro' },
+  agenda:     { icon: '🗂️', label: 'Agenda' },
+  content:    { icon: '📄', label: 'Inhalt' },
+  comparison: { icon: '⚖️', label: 'Vergleich' },
+  data:       { icon: '📊', label: 'Daten' },
+  process:    { icon: '🔄', label: 'Prozess' },
+  timeline:   { icon: '📅', label: 'Timeline' },
+  quote:      { icon: '❝',  label: 'Zitat' },
+  image:      { icon: '🖼️', label: 'Bild' },
+  cta:        { icon: '🎯', label: 'Call-to-Action' },
+  closing:    { icon: '🏁', label: 'Abschluss' },
+};
+const SLIDE_TYPE_KEYS = Object.keys(SLIDE_TYPE_META);
+function slideTypeMeta(type) { return SLIDE_TYPE_META[type] || SLIDE_TYPE_META.content; }
+function nextSlideType(type) {
+  const i = SLIDE_TYPE_KEYS.indexOf(type);
+  return SLIDE_TYPE_KEYS[(i + 1) % SLIDE_TYPE_KEYS.length];
+}
+
+// Render (or re-render) the editable plan card from `pendingPlan`.
+function showPlanCard() {
   const messages = document.getElementById('chat-messages');
-  if (!messages) return;
-
-  messages.insertAdjacentHTML('beforeend', `
-    <div class="chat-message assistant" id="${msgId}">
-      <div class="plan-summary">${escHtml(plan.summary)}</div>
-      ${outlineHtml}
-      <div class="question-chips" id="${msgId}-chips" style="margin-top:12px">
-        <button class="question-chip" style="border-color:rgba(74,222,128,0.4);background:rgba(74,222,128,0.1)" id="${msgId}-ok">✓ ${t('studio.planConfirm') || 'So erstellen'}</button>
-        <button class="question-chip" id="${msgId}-cancel">✗ ${t('common.cancel') || 'Abbrechen'}</button>
-      </div>
-    </div>
-  `);
+  if (!messages || !pendingPlan) return;
+  let card = document.getElementById('plan-card');
+  if (!card) {
+    messages.insertAdjacentHTML('beforeend', '<div class="chat-message assistant plan-card" id="plan-card"></div>');
+    card = document.getElementById('plan-card');
+  }
+  card.innerHTML = renderPlanInner(pendingPlan.plan);
+  bindPlanCard(card);
   messages.scrollTop = messages.scrollHeight;
+}
 
-  document.getElementById(`${msgId}-ok`)?.addEventListener('click', () => {
-    // Disable chips to prevent double-fire
-    document.querySelectorAll(`#${msgId} button`).forEach(b => b.disabled = true);
-    // Replace chips with "creating" status
-    const chipsDiv = document.getElementById(`${msgId}-chips`);
-    if (chipsDiv) chipsDiv.innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;opacity:0.65;font-size:12px;margin-top:4px">
+function renderPlanInner(plan) {
+  const outline = plan.outline || [];
+  const items = outline.map((s, i) => {
+    const meta = slideTypeMeta(s.type);
+    const points = (s.points || []).map((p, j) => `
+      <li class="plan-point">
+        <span class="plan-point-text" contenteditable="true" data-slide="${i}" data-point="${j}">${escHtml(p)}</span>
+        <button class="plan-x" data-action="del-point" data-slide="${i}" data-point="${j}" title="${t('studio.planDelPoint')}">×</button>
+      </li>`).join('');
+    return `
+      <li class="plan-slide" data-slide="${i}">
+        <div class="plan-slide-head">
+          <span class="plan-slide-num">${i + 1}</span>
+          <button class="plan-type-chip type-${s.type}" data-action="cycle-type" data-slide="${i}" title="${t('studio.planCycleType')}">${meta.icon} ${escHtml(meta.label)}</button>
+          <span class="plan-title" contenteditable="true" data-slide="${i}" data-field="title" data-placeholder="${t('studio.planTitlePh')}">${escHtml(s.title || '')}</span>
+          <span class="plan-slide-actions">
+            <button class="plan-x" data-action="up" data-slide="${i}" title="${t('studio.planMoveUp')}" ${i === 0 ? 'disabled' : ''}>↑</button>
+            <button class="plan-x" data-action="down" data-slide="${i}" title="${t('studio.planMoveDown')}" ${i === outline.length - 1 ? 'disabled' : ''}>↓</button>
+            <button class="plan-x danger" data-action="del-slide" data-slide="${i}" title="${t('studio.planDelSlide')}">✕</button>
+          </span>
+        </div>
+        <ul class="plan-points">
+          ${points}
+          <li><button class="plan-add-point" data-action="add-point" data-slide="${i}">+ ${t('studio.planAddPoint')}</button></li>
+        </ul>
+      </li>`;
+  }).join('');
+
+  const badge = plan.action === 'insert' ? t('studio.planInsert') : t('studio.planGenerate');
+  return `
+    <div class="plan-summary" contenteditable="true" data-field="summary">${escHtml(plan.summary || '')}</div>
+    <div class="plan-meta">
+      <span class="plan-action-badge plan-action-${plan.action}">${badge}</span>
+      <span class="plan-count">${outline.length} ${t('common.slides') || 'Slides'}</span>
+    </div>
+    <ol class="plan-outline">${items}</ol>
+    <button class="plan-add-slide" data-action="add-slide">+ ${t('studio.planAddSlide')}</button>
+    <div class="plan-hint">💬 ${t('studio.planHint')}</div>
+    <div class="plan-actions">
+      <button class="btn btn-primary btn-sm" data-action="confirm">✓ ${t('studio.planConfirm') || 'So erstellen'}</button>
+      <button class="btn btn-ghost btn-sm" data-action="cancel">${t('common.cancel') || 'Abbrechen'}</button>
+    </div>`;
+}
+
+// Single delegated binding per render: inline text edits update the model live;
+// structural actions mutate the outline and re-render.
+function bindPlanCard(card) {
+  // Enter confirms an inline edit (blur) instead of inserting a newline.
+  card.onkeydown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && e.target.getAttribute('contenteditable') === 'true') {
+      e.preventDefault();
+      e.target.blur();
+    }
+  };
+  card.oninput = (e) => {
+    if (!pendingPlan) return;
+    const el = e.target;
+    if (el.dataset.field === 'summary') { pendingPlan.plan.summary = el.textContent; return; }
+    const i = Number(el.dataset.slide);
+    if (Number.isNaN(i) || !pendingPlan.plan.outline[i]) return;
+    if (el.dataset.field === 'title') pendingPlan.plan.outline[i].title = el.textContent;
+    else if (el.dataset.point !== undefined) pendingPlan.plan.outline[i].points[Number(el.dataset.point)] = el.textContent;
+  };
+
+  card.onclick = (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn || !pendingPlan) return;
+    const a = btn.dataset.action;
+    const ol = pendingPlan.plan.outline;
+    const i = btn.dataset.slide !== undefined ? Number(btn.dataset.slide) : -1;
+
+    if (a === 'confirm') return confirmPendingPlan();
+    if (a === 'cancel') return cancelPendingPlan();
+
+    if (a === 'add-slide') ol.push({ title: '', type: 'content', points: [] });
+    else if (a === 'del-slide') ol.splice(i, 1);
+    else if (a === 'up' && i > 0) { [ol[i - 1], ol[i]] = [ol[i], ol[i - 1]]; }
+    else if (a === 'down' && i < ol.length - 1) { [ol[i + 1], ol[i]] = [ol[i], ol[i + 1]]; }
+    else if (a === 'add-point') { (ol[i].points = ol[i].points || []).push(''); }
+    else if (a === 'del-point') ol[i].points.splice(Number(btn.dataset.point), 1);
+    else if (a === 'cycle-type') ol[i].type = nextSlideType(ol[i].type);
+    else return;
+
+    pendingPlan.plan.slideCount = ol.length;
+    showPlanCard();
+  };
+}
+
+function confirmPendingPlan() {
+  if (!pendingPlan) return;
+  const { plan, prompt, attachments } = pendingPlan;
+  plan.outline = (plan.outline || []).filter(s => (s.title || '').trim());
+  plan.slideCount = plan.outline.length;
+  pendingPlan = null;
+
+  // Freeze the card: drop editing affordances, show a "creating" status
+  const card = document.getElementById('plan-card');
+  if (card) {
+    card.removeAttribute('id');
+    card.classList.add('plan-card-confirmed');
+    card.querySelectorAll('[contenteditable]').forEach(el => el.setAttribute('contenteditable', 'false'));
+    const actions = card.querySelector('.plan-actions');
+    if (actions) actions.outerHTML = `
+      <div class="plan-creating-status" style="display:flex;align-items:center;gap:6px;opacity:0.7;font-size:12px;margin-top:8px">
         <div class="gen-toast-dots" style="transform:scale(0.7)"><span></span><span></span><span></span></div>
-        <span>${plan.slideCount > 0 ? `${plan.slideCount} Slides — ${t('studio.planGenerating') || 'Creating…'}` : (t('studio.planGenerating') || 'Creating…')}</span>
+        <span>${plan.slideCount} Slides — ${t('studio.planGenerating') || 'Creating…'}</span>
       </div>`;
-    onConfirm(plan);  // pass the full plan object
-  });
+    card.querySelectorAll('.plan-add-slide, .plan-add-point, .plan-x, .plan-hint').forEach(el => el.remove());
+  }
 
-  document.getElementById(`${msgId}-cancel`)?.addEventListener('click', () => {
-    document.getElementById(msgId)?.remove();
-    const input = document.getElementById('chat-input');
-    if (input) { input.disabled = false; input.focus(); }
-    const sendBtn = document.getElementById('send-btn');
-    if (sendBtn) sendBtn.disabled = false;
-  });
+  if (plan.action === 'insert') startInsertOperation(prompt, attachments, plan);
+  else startFullGeneration(prompt, attachments, plan);
+}
+
+function cancelPendingPlan() {
+  pendingPlan = null;
+  document.getElementById('plan-card')?.remove();
+  const input = document.getElementById('chat-input');
+  if (input) { input.disabled = false; input.focus(); }
+  const sendBtn = document.getElementById('send-btn');
+  if (sendBtn) sendBtn.disabled = false;
 }
 
 function startFullGeneration(prompt, attachments, plan = null) {
@@ -773,7 +895,7 @@ function startInsertOperation(prompt, attachments, plan = null) {
     label: t('studio.generating'),
     type: 'insert',
     meta: { afterIndex },
-    apiCall: (signal) => api.ai.insertSlide(currentPresentation.id, afterIndex, prompt, signal),
+    apiCall: (signal) => api.ai.insertSlide(currentPresentation.id, afterIndex, prompt, signal, plan),
   });
   _watchJob(jobId);
 }
@@ -793,6 +915,33 @@ async function sendMessage() {
     return;
   }
 
+  // ── Refinement loop: a plan is already on the table → revise it ─────────
+  if (pendingPlan) {
+    input.value = '';
+    addChatMessage('user', prompt);
+    input.disabled = true;
+    document.getElementById('send-btn').disabled = true;
+    const thinkingId = addThinkingMessage(t('studio.planRevising'));
+    try {
+      const revised = await api.ai.plan(currentPresentation.id, prompt, pendingPlan.attachments, pendingPlan.plan);
+      removeThinkingMessage(thinkingId);
+      input.disabled = false;
+      document.getElementById('send-btn').disabled = false;
+      if (revised && Array.isArray(revised.outline) && revised.outline.length) {
+        pendingPlan.plan = revised;
+        showPlanCard();
+      } else {
+        toastError(t('studio.planError') || 'Planung fehlgeschlagen');
+      }
+    } catch (err) {
+      removeThinkingMessage(thinkingId);
+      input.disabled = false;
+      document.getElementById('send-btn').disabled = false;
+      toastError((t('studio.planError') || 'Planung fehlgeschlagen') + ': ' + err.message);
+    }
+    return;
+  }
+
   const attachments = [...pendingAttachments];
   clearAttachments();
   input.value = '';
@@ -802,7 +951,7 @@ async function sendMessage() {
     : '';
   addChatMessage('user', prompt + attachmentLabel);
 
-  // ── Planning phase: show plan before generating ───────────────────────
+  // ── Planning phase: propose an editable outline before generating ──────
   input.disabled = true;
   document.getElementById('send-btn').disabled = true;
   const thinkingId = addThinkingMessage();
@@ -813,18 +962,18 @@ async function sendMessage() {
     input.disabled = false;
     document.getElementById('send-btn').disabled = false;
 
-    showPlanInChat(plan, (confirmedPlan) => {
-      if (confirmedPlan.action === 'insert') {
-        startInsertOperation(prompt, attachments, confirmedPlan);
-      } else {
-        startFullGeneration(prompt, attachments, confirmedPlan);
-      }
-    });
+    if (!plan || !Array.isArray(plan.outline) || !plan.outline.length) {
+      // No usable outline → fall back to direct generation
+      startFullGeneration(prompt, attachments, plan || null);
+      return;
+    }
+
+    pendingPlan = { plan, prompt, attachments };
+    showPlanCard();
   } catch (err) {
     removeThinkingMessage(thinkingId);
     input.disabled = false;
     document.getElementById('send-btn').disabled = false;
-    // Planning failed → fall back to direct generation
     toastError((t('studio.planError') || 'Planung fehlgeschlagen') + ': ' + err.message);
   }
 }
@@ -859,6 +1008,10 @@ function bindGenerationEvents() {
     isGenerating = false;
     setGeneratingUI(false);
     hideStreamOverlay();
+    // Settle the confirmed plan card: swap its "creating…" spinner for a check
+    document.querySelectorAll('.plan-creating-status').forEach(el => {
+      el.innerHTML = `<span style="color:var(--success,#4ade80)">✓</span> <span style="opacity:0.7">${t('common.slides') || 'Slides'}</span>`;
+    });
 
     try {
       currentPresentation = await api.presentations.get(currentPresentation.id);
@@ -929,6 +1082,7 @@ function bindGenerationEvents() {
     isGenerating = false;
     setGeneratingUI(false);
     hideStreamOverlay();
+    document.querySelectorAll('.plan-creating-status').forEach(el => el.remove());
     if (e.detail.status !== 'cancelled') {
       addChatMessage('assistant', t('studio.assistantError', { msg: e.detail.error || 'Fehler' }));
       toastError(e.detail.error || 'Generierung fehlgeschlagen');

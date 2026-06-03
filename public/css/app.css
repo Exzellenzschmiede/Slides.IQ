@@ -312,6 +312,92 @@ html, body {
   padding: 3px 0; border-left: 2px solid rgba(124,58,237,0.35); padding-left: 8px;
 }
 
+/* ─── Editable plan card (outline review) ───────────────────────────────── */
+
+.plan-card {
+  width: 100%;
+  border: 1px solid rgba(124,58,237,0.35);
+  background: linear-gradient(180deg, rgba(124,58,237,0.07), rgba(124,58,237,0.02));
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.plan-card .plan-summary {
+  font-weight: 600; font-size: 13px; outline: none; border-radius: 6px;
+}
+.plan-card [contenteditable="true"]:focus {
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 0 2px rgba(124,58,237,0.4);
+}
+.plan-card [contenteditable="true"]:empty::before {
+  content: attr(data-placeholder); color: var(--text-dim);
+}
+
+.plan-meta { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.plan-action-badge {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+}
+.plan-action-generate { background: rgba(124,58,237,0.2); color: #c4b5fd; }
+.plan-action-insert   { background: rgba(6,182,212,0.18);  color: #67e8f9; }
+.plan-count { font-size: 11px; color: var(--text-dim); }
+
+.plan-outline { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.plan-slide {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.18); padding: 8px 10px;
+}
+.plan-slide-head { display: flex; align-items: center; gap: 8px; }
+.plan-slide-num {
+  flex: none; width: 20px; height: 20px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  background: rgba(255,255,255,0.06);
+}
+.plan-type-chip {
+  flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+  color: var(--text-muted); cursor: pointer; white-space: nowrap;
+  transition: all var(--transition);
+}
+.plan-type-chip:hover { border-color: var(--primary); color: var(--text); }
+.plan-title {
+  flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text);
+  outline: none; border-radius: 6px; padding: 2px 4px;
+}
+.plan-slide-actions { flex: none; display: flex; gap: 2px; }
+.plan-x {
+  background: transparent; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 13px; line-height: 1; padding: 3px 5px;
+  border-radius: 5px; transition: all var(--transition);
+}
+.plan-x:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: var(--text); }
+.plan-x.danger:hover { background: rgba(239,68,68,0.18); color: var(--danger); }
+.plan-x:disabled { opacity: 0.25; cursor: default; }
+
+.plan-points { list-style: none; padding: 0; margin: 6px 0 0 28px; display: flex; flex-direction: column; gap: 2px; }
+.plan-point { display: flex; align-items: flex-start; gap: 4px; }
+.plan-point-text {
+  flex: 1; min-width: 0; font-size: 12px; color: var(--text-muted);
+  line-height: 1.45; outline: none; border-radius: 5px; padding: 1px 4px;
+  border-left: 2px solid rgba(124,58,237,0.3); padding-left: 8px;
+}
+.plan-add-point {
+  background: transparent; border: 1px dashed var(--border); color: var(--text-dim);
+  font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; margin-top: 2px;
+}
+.plan-add-point:hover { border-color: var(--primary); color: var(--text-muted); }
+
+.plan-add-slide {
+  width: 100%; margin-top: 10px; padding: 7px;
+  background: transparent; border: 1px dashed rgba(124,58,237,0.4);
+  color: var(--text-muted); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px;
+  transition: all var(--transition);
+}
+.plan-add-slide:hover { border-color: var(--primary); color: var(--text); background: rgba(124,58,237,0.08); }
+
+.plan-hint { font-size: 11px; color: var(--text-dim); margin: 10px 0 8px; line-height: 1.4; }
+.plan-actions { display: flex; gap: 8px; }
+.plan-card-confirmed { opacity: 0.85; }
+
 .thinking-msg {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px;

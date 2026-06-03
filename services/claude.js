@@ -527,12 +527,28 @@ Gib NUR den vollständigen HTML-Code zurück. Kein Markdown, keine Erklärung, k
 
 // ─── Generation with streaming ────────────────────────────────────────────
 
+// Render a confirmed outline into an authoritative spec for the generator.
+// Handles both the rich shape ({title,type,points}) and legacy string titles.
+function renderOutlineSpec(outline) {
+  const lines = outline.map((item, i) => {
+    if (typeof item === 'string') return `${i + 1}. ${item}`;
+    const type = item.type ? ` [${item.type}]` : '';
+    const head = `${i + 1}.${type} ${item.title || ''}`.trim();
+    const pts = Array.isArray(item.points) && item.points.length
+      ? '\n' + item.points.map(p => `   - ${p}`).join('\n')
+      : '';
+    return head + pts;
+  }).join('\n');
+  return `Umzusetzende Gliederung — der Nutzer hat sie bestätigt. Halte EXAKT diese Reihenfolge, Folientitel und Inhalte ein (eine Folie pro Punkt, die Stichpunkte als Inhalt der Folie ausarbeiten):\n${lines}`;
+}
+
 async function generatePresentation({ prompt, plan = null, conversation = [], templateSystemPrompt, templateTheme, attachments = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey }, onChunk) {
   const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, templateTheme);
 
-  // If a confirmed plan outline exists, prepend it to guide generation
+  // If a confirmed plan outline exists, prepend it to guide generation.
+  // The user reviewed/edited this outline — treat it as the authoritative spec.
   const effectivePrompt = plan?.outline?.length
-    ? `${prompt}\n\nUmzusetzendes Outline (EXAKT diese Reihenfolge und Titel einhalten):\n${plan.outline.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
+    ? `${prompt}\n\n${renderOutlineSpec(plan.outline)}`
     : prompt;
 
   // Build content for the new user message.
@@ -902,7 +918,7 @@ Antworte ausschließlich als JSON (kein Markdown):
 
 // ─── Plan a presentation (non-streaming, returns structured JSON) ─────────
 
-async function planPresentation({ prompt, attachments = [], existingSlideCount = 0, conversation = [], model, provider = 'anthropic', apiKey }) {
+async function planPresentation({ prompt, attachments = [], existingSlideCount = 0, conversation = [], previousPlan = null, model, provider = 'anthropic', apiKey }) {
   // Build context from text attachments
   let attachmentContext = '';
   const textAtts = attachments.filter(a => a.type === 'text');
@@ -933,28 +949,40 @@ async function planPresentation({ prompt, attachments = [], existingSlideCount =
     ? `The presentation currently has ${existingSlideCount} slides.`
     : 'The presentation is empty (no slides yet).';
 
-  const planPrompt = `You are a concise presentation planner. ${stateNote}
-${conversationContext}
+  // Revision mode: the user is refining an already-proposed outline.
+  const revisionSection = previousPlan && Array.isArray(previousPlan.outline) && previousPlan.outline.length
+    ? `\n\nThis is a REVISION. Here is the outline you previously proposed (as JSON):
+${JSON.stringify({ action: previousPlan.action, outline: previousPlan.outline }, null, 0)}
+Apply the user's adjustment below to THIS outline and return the COMPLETE updated outline (keep unchanged slides as-is, keep the same action unless the user clearly asks otherwise).`
+    : '';
 
-New user request: ${prompt}${attachmentContext}
+  const planPrompt = `You are a sharp presentation planner. You propose the CONTENT and STRUCTURE of a deck so the user can confirm or tweak it before slides are built. ${stateNote}
+${conversationContext}${revisionSection}
 
-Based on ALL context above, choose the right action and respond with ONLY a JSON object (no markdown):
+${previousPlan ? 'User adjustment' : 'New user request'}: ${prompt}${attachmentContext}
+
+Respond with ONLY a JSON object (no markdown, no prose):
 {
-  "summary": "One sentence in the user's language describing exactly what you will do",
+  "summary": "One short sentence in the user's language describing the deck you'll build",
   "action": "generate",
-  "slideCount": 8,
-  "outline": ["Slide 1 title", ...]
+  "outline": [
+    { "title": "Slide title", "type": "intro", "points": ["concrete content point", "another point"] }
+  ]
 }
 
-Action rules — pick exactly one:
-- "generate": Create a complete new presentation or fully replace the existing one.
-  Use when: presentation is empty, or user wants a completely new version.
-- "insert": Add one or more new slides to the EXISTING presentation.
-  Use when: user says add/ergänze/füge hinzu/append, or asks for additional slides.
-
-slideCount = total slides for "generate", new slides to add for "insert".
-outline must have exactly slideCount entries.
-summary and outline MUST be in the same language as the user's latest request.`;
+Rules:
+- "type" is a short lowercase label for the slide's role. Use one of:
+  intro, agenda, content, comparison, data, process, timeline, quote, image, cta, closing.
+- "points": 2-4 SHORT, CONCRETE content bullets describing what actually goes on the slide
+  (real substance — numbers, names, claims — not meta like "introduce the topic").
+- "title" and all "points" MUST be in the same language as the user's latest request.
+- Choose exactly one "action":
+  - "generate": create a complete new deck or fully replace the existing one
+    (presentation is empty, or the user wants a brand-new version).
+  - "insert": add NEW slides to the EXISTING presentation
+    (user says add / ergänze / füge hinzu / append / weitere Folien).
+- outline length = number of slides (total for "generate", new slides for "insert").
+- Be realistic and tight: prefer a focused deck over padding.`;
 
   const text = await aiProvider.generateText({
     provider,
@@ -968,12 +996,32 @@ summary and outline MUST be in the same language as the user's latest request.`;
     const jsonMatch = text.match(/\{[\s\S]+\}/);
     const plan = JSON.parse(jsonMatch[0]);
     if (!plan.summary || !Array.isArray(plan.outline)) throw new Error('Invalid plan shape');
+    plan.outline = normalizeOutline(plan.outline);
     plan.slideCount = plan.outline.length;
     plan.action = plan.action === 'insert' ? 'insert' : 'generate';
     return plan;
   } catch {
     return { summary: text.substring(0, 200), slideCount: 0, outline: [], action: 'generate' };
   }
+}
+
+// Normalize outline entries to the rich shape { title, type, points[] }.
+// Accepts legacy string entries and tolerates partial AI output.
+function normalizeOutline(outline) {
+  if (!Array.isArray(outline)) return [];
+  const KNOWN = ['intro','agenda','content','comparison','data','process','timeline','quote','image','cta','closing'];
+  return outline.map((item) => {
+    if (typeof item === 'string') return { title: item.trim(), type: 'content', points: [] };
+    if (item && typeof item === 'object') {
+      const title = String(item.title || item.heading || '').trim();
+      let type = String(item.type || 'content').toLowerCase().trim();
+      if (!KNOWN.includes(type)) type = 'content';
+      let points = Array.isArray(item.points) ? item.points : (item.point ? [item.point] : []);
+      points = points.map(p => String(p).trim()).filter(Boolean).slice(0, 4);
+      return { title, type, points };
+    }
+    return { title: '', type: 'content', points: [] };
+  }).filter(s => s.title);
 }
 
 // ─── Generate / edit a single slide ──────────────────────────────────────
@@ -1030,5 +1078,7 @@ module.exports = {
   injectFramework,
   stripFramework,
   extractPresentationText,
+  normalizeOutline,
+  renderOutlineSpec,
   PRESENTATION_FRAMEWORK
 };
