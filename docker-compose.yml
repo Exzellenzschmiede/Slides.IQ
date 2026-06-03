@@ -5,11 +5,18 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    # Load the full configuration (SMTP_*, STRIPE_*, BASE_URL, SESSION_SECRET, …)
+    # from .env INTO the container. Without this the SMTP_* vars are absent in the
+    # container and the mailer falls back to dev mode (it only logs the email
+    # instead of sending it via Postfix).
+    env_file:
+      - .env
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - NODE_ENV=production
-      - BASE_URL=${BASE_URL:-http://localhost:3000}
-      - SESSION_SECRET=${SESSION_SECRET:-changeme}
+    # Allow the container to reach the Postfix relay on the VPS host through
+    # SMTP_HOST=host.docker.internal (Linux requires this explicit mapping).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - nexus-data:/app/data
     security_opt:
