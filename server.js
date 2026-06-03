@@ -222,8 +222,8 @@ const sendPublic = (file) => (req, res) => res.sendFile(path.join(__dirname, 'pu
 
 app.get('/', sendPublic('landing.html'));
 app.get('/pricing', sendPublic('landing.html'));
-// Legal pages (/impressum, /datenschutz) and email-link pages (/verify,
-// /forgot-password, /reset-password) are registered by their workstreams.
+app.get('/impressum', sendPublic('legal/impressum.html'));
+app.get('/datenschutz', sendPublic('legal/datenschutz.html'));
 
 // ─── Authenticated SPA shell (hash-routed) ────────────────────────────────
 
