@@ -1798,7 +1798,9 @@ export function t(key, params) {
   if (value === undefined) value = resolve('en');
   if (value === undefined) return key; // final fallback: the key itself
 
-  if (typeof value !== 'string') return key;
+  // Non-string values (e.g. arrays like welcomeChips) are returned as-is;
+  // param interpolation only applies to strings.
+  if (typeof value !== 'string') return value;
 
   if (params) {
     value = value.replace(/\{\{(\w+)\}\}/g, (_, k) =>
