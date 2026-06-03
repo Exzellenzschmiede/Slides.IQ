@@ -705,13 +705,58 @@ function injectFramework(rawHtml) {
 
 module.exports.stripFramework = stripFramework;
 
+// ─── Slide text extraction for AI analysis ─────────────────────────────────
+// IMPORTANT: a naive `replace(/<[^>]+>/g, ' ')` only removes the tags, not the
+// text *inside* <style>/<script> blocks — so the head CSS and the framework JS
+// survive and dominate the output. With a char cap, the first N chars end up
+// being raw CSS and the actual slide text is cut off entirely. We must drop
+// style/script/comment blocks (content included) before stripping tags.
+function extractPresentationText(htmlContent, limit = 6000) {
+  let html = stripFramework(htmlContent || '');
+
+  // Pull speaker notes first (they carry narrative intent) before attrs vanish
+  const notes = [];
+  html.replace(/data-notes=("|')([\s\S]*?)\1/gi, (_, _q, n) => {
+    const v = n.trim();
+    if (v) notes.push(v);
+    return '';
+  });
+
+  let text = html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')   // drop CSS blocks (content included)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ') // drop JS blocks (content included)
+    .replace(/<head[\s\S]*?<\/head>/gi, ' ')     // drop <head> (meta/title/links)
+    .replace(/<!--[\s\S]*?-->/g, ' ')            // drop comments (framework markers)
+    .replace(/<[^>]+>/g, ' ')                    // strip remaining tags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&[a-z]+;/gi, ' ')                  // collapse leftover entities
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (notes.length) {
+    text += '\n\n[Speaker Notes]\n' + notes.join('\n');
+  }
+  return text.substring(0, limit);
+}
+
 // ─── Narrative Arc Analysis ────────────────────────────────────────────────
 
 async function analyzeNarrativeArc(htmlContent, apiKey) {
   const anthropic = getAnthropicClient(apiKey);
 
-  // Extract slide content (strip HTML tags for analysis)
-  const textContent = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 3000);
+  // Extract human-readable slide content (CSS/JS removed — see helper above)
+  const textContent = extractPresentationText(htmlContent, 6000);
+
+  // Empty/near-empty deck: report clearly instead of letting the model guess
+  if (textContent.trim().length < 40) {
+    return {
+      score: 0,
+      strengths: [],
+      improvements: ['Die Präsentation enthält noch keinen auswertbaren Textinhalt. Erstelle zuerst Folien mit Inhalt.'],
+      narrativeFlow: 'schwach',
+      summary: 'Noch kein auswertbarer Inhalt vorhanden.'
+    };
+  }
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -747,7 +792,7 @@ Antworte als JSON:
 
 async function suggestImprovements(htmlContent, focusArea, apiKey) {
   const anthropic = getAnthropicClient(apiKey);
-  const textContent = htmlContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 2000);
+  const textContent = extractPresentationText(htmlContent, 4000);
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -969,5 +1014,6 @@ module.exports = {
   analyzeTemplateFromPptx,
   injectFramework,
   stripFramework,
+  extractPresentationText,
   PRESENTATION_FRAMEWORK
 };
