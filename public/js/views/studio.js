@@ -12,6 +12,9 @@ let currentPresentation = null;
 let isGenerating = false;
 let presenterTimerInterval = null;
 let presenterSeconds = 0;
+let presenterWs = null;           // live-audience broadcast socket
+let presenterHeartbeat = null;    // re-sends current slide so late joiners sync
+let presenterSlideIndex = 0;      // last slide index shown in presenter iframe
 let pendingAttachments = []; // [{type, name, content?, data?, mediaType?}]
 
 // Slide navigator state
@@ -311,12 +314,16 @@ function onIframeMessage(e) {
       `${e.data.total} ${t('common.slides')} · ${t('studio.metaActive', { count: e.data.total, index: e.data.index + 1 })}`;
     syncNavigatorToSlide(e.data.index);
   }
-  // Presenter panel
-  if (e.data?.type === 'nexus-slide') {
+  // Presenter panel — only react to the presenter iframe, and broadcast to the
+  // live audience so viewers on /view/:token?live=1 follow the same slide.
+  const presenterIframe = document.getElementById('presenter-iframe');
+  if (e.data?.type === 'nexus-slide' && presenterIframe && e.source === presenterIframe.contentWindow) {
     const notesEl = document.getElementById('presenter-notes-content');
     const counterEl = document.getElementById('presenter-counter');
     if (notesEl) notesEl.textContent = e.data.notes || '—';
     if (counterEl) counterEl.textContent = `${e.data.index + 1} / ${e.data.total}`;
+    presenterSlideIndex = e.data.index;
+    broadcastSlide(e.data.index);
   }
 }
 
@@ -1387,7 +1394,7 @@ async function showTemplateChooser() {
 
 // ─── Presenter mode ───────────────────────────────────────────────────────
 
-function openPresenterMode() {
+async function openPresenterMode() {
   if (!currentPresentation.html_content) return;
 
   const panel = document.getElementById('presenter-panel');
@@ -1407,11 +1414,59 @@ function openPresenterMode() {
     const el = document.getElementById('presenter-timer');
     if (el) el.textContent = `${m}:${s}`;
   }, 1000);
+
+  // Start live-audience broadcast (best-effort — presenting still works offline)
+  presenterSlideIndex = 0;
+  startPresenterBroadcast();
+}
+
+// Ensure a public share token exists, open the WS room and start broadcasting
+// the current slide so any /view/:token?live=1 viewer follows along live.
+async function startPresenterBroadcast() {
+  stopPresenterBroadcast();
+  const linkEl = document.getElementById('presenter-live-url');
+  const copyBtn = document.getElementById('presenter-live-copy');
+  try {
+    const share = await api.presentations.share(currentPresentation.id);
+    currentPresentation.share_token = share.token;
+    const liveUrl = `${share.shareUrl}?live=1`;
+
+    if (linkEl) linkEl.textContent = liveUrl;
+    if (copyBtn) copyBtn.onclick = () =>
+      navigator.clipboard.writeText(liveUrl).then(() => toastSuccess(t('studio.shareLinkCopied')));
+
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    presenterWs = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(share.token)}`);
+    presenterWs.addEventListener('open', () => {
+      broadcastSlide(presenterSlideIndex);
+      // Heartbeat: re-send current slide so viewers joining mid-talk catch up
+      clearInterval(presenterHeartbeat);
+      presenterHeartbeat = setInterval(() => broadcastSlide(presenterSlideIndex), 2500);
+    });
+  } catch (e) {
+    if (linkEl) linkEl.textContent = t('studio.liveLinkError') || 'Live link unavailable';
+  }
+}
+
+function broadcastSlide(index) {
+  if (presenterWs?.readyState === WebSocket.OPEN) {
+    presenterWs.send(JSON.stringify({ type: 'slide-change', index }));
+  }
+}
+
+function stopPresenterBroadcast() {
+  clearInterval(presenterHeartbeat);
+  presenterHeartbeat = null;
+  if (presenterWs) {
+    try { presenterWs.close(); } catch {}
+    presenterWs = null;
+  }
 }
 
 window.closePresenter = () => {
   document.getElementById('presenter-panel').classList.add('hidden');
   clearInterval(presenterTimerInterval);
+  stopPresenterBroadcast();
 };
 
 window.resetTimer = () => {

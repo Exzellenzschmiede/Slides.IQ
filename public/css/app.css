@@ -1067,6 +1067,20 @@ html, body {
   color: var(--text-dim); min-height: 60px;
 }
 
+.presenter-live {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+}
+.presenter-live-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+}
+.presenter-live-url {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 12px; color: var(--accent);
+  background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 8px;
+}
+
 .presenter-controls {
   display: flex; align-items: center; justify-content: space-between;
   background: var(--bg-card); border: 1px solid var(--border);

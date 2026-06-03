@@ -135,6 +135,10 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
 .overview-slide-wrapper iframe { width: 400%; height: 400%; transform: scale(0.25); transform-origin: top left; pointer-events: none; border: none; }
 .overview-slide-label { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.6); font-size: 11px; padding: 2px 8px; border-radius: 4px; }
 #overview-close { position: fixed; top: 20px; right: 24px; z-index: 999; }
+/* Live audience follower: pure projection, no controls */
+body.nexus-live-follower #nexus-controls,
+body.nexus-live-follower #speaker-notes-panel,
+body.nexus-live-follower #overview-panel { display: none !important; }
 </style>
 
 <div id="nexus-controls" class="always-visible">
@@ -164,6 +168,7 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
   let slides = Array.from(document.querySelectorAll('#nexus-presentation .slide'));
   if (!slides.length) slides = Array.from(document.querySelectorAll('.slide'));
   let current = 0;
+  var liveFollower = false; // true on /view/:token?live=1 — slide nav driven by presenter
 
   function goto(n, skipAnimation) {
     if (n < 0 || n >= slides.length) return;
@@ -192,6 +197,7 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
   // Keyboard
   document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (liveFollower) { if (e.key === 'f' || e.key === 'F') toggleFullscreen(); return; }
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goto(current + 1); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); goto(current - 1); }
     if (e.key === 'ArrowUp') { e.preventDefault(); goto(0); }
@@ -212,6 +218,7 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
     touchStartY = e.touches[0].clientY;
   }, { passive: true });
   document.addEventListener('touchend', function(e) {
+    if (liveFollower) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
@@ -315,6 +322,41 @@ body:has(#nexus-controls:hover) #nexus-controls { opacity: 1; }
   try {
     new ResizeObserver(function() { scalePresentation(); }).observe(document.documentElement);
   } catch(e) {}
+
+  // ─── Live audience sync (follower) ──────────────────────────────────────
+  // Active only on the public page /view/:token when opened with ?live=1.
+  // Connects to the WS room and follows the presenter's slide changes.
+  (function initLiveFollow() {
+    var parts = location.pathname.split('/').filter(Boolean); // e.g. ['view','TOKEN']
+    var params = new URLSearchParams(location.search);
+    if (parts[0] !== 'view' || !parts[1] || !params.has('live')) return;
+    var token = parts[1];
+    liveFollower = true;
+    document.body.classList.add('nexus-live-follower');
+    var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    var wsUrl = proto + '://' + location.host + '/ws?token=' + encodeURIComponent(token);
+    var ws, reconnectTimer;
+    function scheduleReconnect() {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, 2000);
+    }
+    function connect() {
+      try { ws = new WebSocket(wsUrl); }
+      catch (e) { scheduleReconnect(); return; }
+      ws.addEventListener('message', function(ev) {
+        try {
+          var msg = JSON.parse(ev.data);
+          if (msg && msg.type === 'slide-change' && typeof msg.index === 'number'
+              && msg.index >= 0 && msg.index < slides.length && msg.index !== current) {
+            goto(msg.index, true);
+          }
+        } catch (e) {}
+      });
+      ws.addEventListener('close', scheduleReconnect);
+      ws.addEventListener('error', function() { try { ws.close(); } catch (e) {} });
+    }
+    connect();
+  })();
 
   // Init
   goto(0);
