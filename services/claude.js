@@ -573,8 +573,15 @@ async function generatePresentation({ prompt, plan = null, conversation = [], te
     userContent = effectivePrompt;
   }
 
+  // Assistant turns are stored as the fully-rendered deck (framework engine
+  // CSS+JS injected). The model must never see that engine — it only authors
+  // slides, and the framework is re-injected afterwards. Strip it from prior
+  // turns to cut token bloat and avoid the model echoing engine code.
   const messages = [
-    ...conversation.map(m => ({ role: m.role, content: m.content })),
+    ...conversation.map(m => ({
+      role: m.role,
+      content: (m.role === 'assistant' && looksLikeHtml(m.content)) ? stripFramework(m.content) : m.content
+    })),
     { role: 'user', content: userContent }
   ];
 
@@ -704,6 +711,12 @@ function injectFramework(rawHtml) {
 }
 
 module.exports.stripFramework = stripFramework;
+
+// True when a stored conversation turn carries a full HTML deck (assistant
+// turns store the rendered presentation as their content).
+function looksLikeHtml(s) {
+  return typeof s === 'string' && /<(?:!doctype|html|div|section|style|body)\b/i.test(s);
+}
 
 // ─── Slide text extraction for AI analysis ─────────────────────────────────
 // IMPORTANT: a naive `replace(/<[^>]+>/g, ' ')` only removes the tags, not the
@@ -906,11 +919,13 @@ async function planPresentation({ prompt, attachments = [], existingSlideCount =
   const conversationContext = recentConversation.length > 0
     ? '\n\nConversation so far:\n' + recentConversation.map(m => {
         const role = m.role === 'user' ? 'User' : 'Assistant';
-        const text = String(Array.isArray(m.content)
+        let raw = Array.isArray(m.content)
           ? m.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
-          : m.content
-        ).substring(0, 400);
-        return `${role}: ${text}`;
+          : String(m.content || '');
+        // Assistant turns store the full HTML deck — distill to readable slide
+        // text so the planner sees actual slide content, not raw CSS/markup.
+        if (looksLikeHtml(raw)) raw = extractPresentationText(raw, 500);
+        return `${role}: ${raw.substring(0, 500)}`;
       }).join('\n')
     : '';
 
