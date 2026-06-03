@@ -75,10 +75,52 @@ db.exec(`
     value TEXT NOT NULL
   );
 
+  -- Single-use, expiring tokens for email verification & password reset.
+  -- the token column stores a SHA-256 hash of the raw token (raw value only lives in the email link).
+  CREATE TABLE IF NOT EXISTS auth_tokens (
+    token       TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type        TEXT NOT NULL,              -- 'verify' | 'reset'
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- One row per user holding their current subscription state (mirrors Stripe).
+  -- A missing row means the user is implicitly on the Free plan.
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id                TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    plan                   TEXT NOT NULL DEFAULT 'free',
+    status                 TEXT NOT NULL DEFAULT 'active',
+    stripe_customer_id     TEXT,
+    stripe_subscription_id TEXT,
+    stripe_price_id        TEXT,
+    current_period_end     TEXT,
+    cancel_at_period_end   INTEGER NOT NULL DEFAULT 0,
+    admin_override_plan    TEXT,
+    updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Per-user, per-period usage counters (period = calendar month 'YYYY-MM').
+  -- Reset is implicit: a new month is a new period key with no row → count 0.
+  CREATE TABLE IF NOT EXISTS usage_counters (
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    period      TEXT NOT NULL,
+    metric      TEXT NOT NULL,             -- 'ai_generations'
+    count       INTEGER NOT NULL DEFAULT 0,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, period, metric)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_presentations_updated ON presentations(updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_presentations_share ON presentations(share_token);
+  CREATE INDEX IF NOT EXISTS idx_presentations_user ON presentations(user_id);
   CREATE INDEX IF NOT EXISTS idx_shares_user ON presentation_shares(user_id);
   CREATE INDEX IF NOT EXISTS idx_shares_presentation ON presentation_shares(presentation_id);
+  CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
+  CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(stripe_customer_id);
+  CREATE INDEX IF NOT EXISTS idx_subscriptions_sub ON subscriptions(stripe_subscription_id);
+  CREATE INDEX IF NOT EXISTS idx_usage_user_period ON usage_counters(user_id, period);
 `);
 
 // Schema migrations — add columns that may be missing in older DB instances
@@ -99,10 +141,20 @@ const migrations = [
   "ALTER TABLE templates ADD COLUMN owner_id TEXT REFERENCES users(id) ON DELETE SET NULL",
   "ALTER TABLE templates ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
+  // email_verified DEFAULT 1 so existing/admin-created users are never locked out;
+  // self-registered users are inserted explicitly with email_verified = 0.
+  "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1",
+  // subscriptions columns (idempotent for instances where the table predates a column)
+  "ALTER TABLE subscriptions ADD COLUMN stripe_price_id TEXT",
+  "ALTER TABLE subscriptions ADD COLUMN cancel_at_period_end INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE subscriptions ADD COLUMN admin_override_plan TEXT",
 ];
 for (const sql of migrations) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
 }
+
+// Prune expired auth tokens on startup (keeps the table small; cheap).
+try { db.prepare("DELETE FROM auth_tokens WHERE expires_at < datetime('now')").run(); } catch (_) {}
 
 // Fix settings table: the original schema had `key TEXT PRIMARY KEY` (single-column),
 // which means different users sharing the same key overwrote each other's settings.
