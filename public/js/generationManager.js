@@ -102,6 +102,8 @@ class GenerationManager {
     } catch (err) {
       job.status = err.name === 'AbortError' ? 'cancelled' : 'error';
       job.error = err.name === 'AbortError' ? null : err.message;
+      // Capture entitlement limit info (402/403) so the UI can show an upgrade prompt.
+      if (err.status === 402 || err.status === 403) job.limitInfo = err.body || { code: err.code };
       this._updateCard(job);
       window.dispatchEvent(new CustomEvent('genmanager:error', { detail: this._jobDetail(job) }));
       setTimeout(() => this._dismissCard(job), 8000);
@@ -119,6 +121,7 @@ class GenerationManager {
       newIndex: job.newIndex,
       error: job.error,
       status: job.status,
+      limitInfo: job.limitInfo || null,
     };
   }
 

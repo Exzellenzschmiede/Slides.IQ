@@ -6,6 +6,8 @@ const db = require('../database');
 const { generatePresentation, generateSingleSlide, planPresentation, analyzeNarrativeArc, suggestImprovements } = require('../services/claude');
 const { parseSlidesFromHtml, replaceSlideInHtml, insertSlideInHtml, extractCssFromHtml } = require('../services/slideUtils');
 const { parseFile } = require('../services/fileParser');
+const ent = require('../services/entitlements');
+const { requireCanGenerate, requireFeature } = require('../middleware/entitlements');
 
 const router = express.Router();
 
@@ -57,7 +59,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
 // ─── Generate / Update presentation via AI (streaming SSE) ────────────────
 
-router.post('/generate/:presentationId', async (req, res) => {
+router.post('/generate/:presentationId', requireCanGenerate, async (req, res) => {
   const { prompt, save_version = true, attachments = [], plan = null } = req.body;
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
@@ -151,6 +153,7 @@ router.post('/generate/:presentationId', async (req, res) => {
       WHERE id = ?
     `).run(fullHtml, JSON.stringify(newConversation), JSON.stringify(versions), slideCount, row.id);
 
+    ent.incrementUsage(req.session.userId); // count one AI generation (succeeded)
     send({ type: 'done', slide_count: slideCount });
     res.end();
   } catch (err) {
@@ -162,7 +165,7 @@ router.post('/generate/:presentationId', async (req, res) => {
 
 // ─── Edit a single slide via AI (streaming SSE) ───────────────────────────
 
-router.post('/edit-slide/:presentationId', async (req, res) => {
+router.post('/edit-slide/:presentationId', requireCanGenerate, async (req, res) => {
   const { prompt, slideIndex } = req.body;
   if (!prompt || slideIndex === undefined) return res.status(400).json({ error: 'prompt and slideIndex required' });
 
@@ -217,6 +220,7 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
     db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, conversation = ?, updated_at = datetime('now') WHERE id = ?`)
       .run(newHtml, JSON.stringify(versions.slice(0, 20)), slideCount, JSON.stringify(newConvEdit), row.id);
 
+    ent.incrementUsage(req.session.userId);
     send({ type: 'done', slide_count: slideCount });
     res.end();
   } catch (err) {
@@ -228,7 +232,7 @@ router.post('/edit-slide/:presentationId', async (req, res) => {
 
 // ─── Insert a new slide via AI (streaming SSE) ────────────────────────────
 
-router.post('/insert-slide/:presentationId', async (req, res) => {
+router.post('/insert-slide/:presentationId', requireCanGenerate, async (req, res) => {
   const { prompt, afterIndex, plan = null } = req.body;
   if (!prompt || afterIndex === undefined) return res.status(400).json({ error: 'prompt and afterIndex required' });
 
@@ -308,6 +312,7 @@ router.post('/insert-slide/:presentationId', async (req, res) => {
     db.prepare(`UPDATE presentations SET html_content = ?, versions = ?, slide_count = ?, conversation = ?, updated_at = datetime('now') WHERE id = ?`)
       .run(html, JSON.stringify(versions.slice(0, 20)), slideCount, JSON.stringify(newConvInsert), row.id);
 
+    ent.incrementUsage(req.session.userId);
     send({ type: 'done', slide_count: slideCount, new_index: afterIndex + 1 });
     res.end();
   } catch (err) {
@@ -341,7 +346,7 @@ router.post('/plan/:presentationId', async (req, res) => {
 
 // ─── Analyze narrative arc ────────────────────────────────────────────────
 
-router.post('/analyze/:presentationId', async (req, res) => {
+router.post('/analyze/:presentationId', requireFeature('narrativeAnalysis'), async (req, res) => {
   const row = db.prepare('SELECT html_content FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'No content' });
 
@@ -358,7 +363,7 @@ router.post('/analyze/:presentationId', async (req, res) => {
 
 // ─── Suggest improvements ─────────────────────────────────────────────────
 
-router.post('/suggest/:presentationId', async (req, res) => {
+router.post('/suggest/:presentationId', requireFeature('narrativeAnalysis'), async (req, res) => {
   const { focusArea } = req.body;
   const row = db.prepare('SELECT html_content FROM presentations WHERE id = ?').get(req.params.presentationId);
   if (!row || !row.html_content) return res.status(404).json({ error: 'No content' });

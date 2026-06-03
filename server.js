@@ -52,7 +52,19 @@ wss.on('connection', (ws, req) => {
 
 app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
+
+// Stripe webhook needs the RAW body for signature verification — must be
+// registered BEFORE the global express.json() parser.
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), require('./routes/billing').webhookHandler);
+
 app.use(express.json({ limit: '50mb' }));
+
+// Fail fast in production if the session secret is missing/default.
+if (process.env.NODE_ENV === 'production' &&
+    (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'slides-iq-secret-change-me')) {
+  console.error('FATAL: SESSION_SECRET must be set to a strong unique value in production.');
+  process.exit(1);
+}
 
 const sessionDb = new Database('./data/sessions.db');
 app.use(session({
@@ -68,7 +80,9 @@ app.use(session({
   }
 }));
 
-app.use(express.static(path.join(__dirname, 'public')));
+// index:false so a bare GET '/' is NOT auto-served as a shell — the public
+// marketing landing owns '/', the SPA shell (app.html) is served at '/app'.
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // ─── Rate limiting ────────────────────────────────────────────────────────
 
@@ -78,8 +92,23 @@ const aiLimiter = rateLimit({
   message: { error: 'Too many AI requests. Please wait.' }
 });
 
+// Abuse protection for public auth endpoints (per-IP; trust proxy is set).
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  message: { error: 'Zu viele Versuche. Bitte später erneut versuchen.' }
+});
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 5,
+  message: { error: 'Zu viele Versuche. Bitte später erneut versuchen.' }
+});
+
 // ─── Auth Routes (public) ─────────────────────────────────────────────────
 
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', registerLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
+app.use('/api/auth/resend-verification', registerLimiter);
 app.use('/api/auth', require('./routes/auth'));
 
 // ─── Protected API Routes ─────────────────────────────────────────────────
@@ -87,6 +116,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/presentations', requireAuth, require('./routes/presentations'));
 app.use('/api/templates', requireAuth, require('./routes/templates'));
 app.use('/api/ai', requireAuth, aiLimiter, require('./routes/ai'));
+app.use('/api/billing', requireAuth, require('./routes/billing').router);
 
 // ─── Settings API (user-scoped) ───────────────────────────────────────────
 
@@ -137,6 +167,24 @@ app.put('/api/admin/ai-settings', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Admin: per-user plan override ────────────────────────────────────────
+
+app.put('/api/admin/users/:id/plan', requireAdmin, (req, res) => {
+  const db = require('./database');
+  const { plan } = req.body; // 'free' | 'pro' | 'business' | null (clear override)
+  if (plan && !['free', 'pro', 'business'].includes(plan)) {
+    return res.status(400).json({ error: 'Ungültiger Tarif' });
+  }
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
+  db.prepare(`
+    INSERT INTO subscriptions (user_id, admin_override_plan, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET admin_override_plan = excluded.admin_override_plan, updated_at = datetime('now')
+  `).run(req.params.id, plan || null);
+  res.json({ ok: true, plan: plan || null });
+});
+
 // ─── Admin: Framework migration ───────────────────────────────────────────
 
 app.post('/api/admin/migrate-frameworks', requireAdmin, (req, res) => {
@@ -166,11 +214,26 @@ app.get('/view/:token', (req, res) => {
   res.send(row.html_content);
 });
 
-// ─── SPA fallback ─────────────────────────────────────────────────────────
+// ─── Public marketing site ────────────────────────────────────────────────
+// '/' and '/pricing' serve the standalone marketing landing. Legal and auth
+// helper pages are added by their respective workstreams once the files exist.
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+const sendPublic = (file) => (req, res) => res.sendFile(path.join(__dirname, 'public', file));
+
+app.get('/', sendPublic('landing.html'));
+app.get('/pricing', sendPublic('landing.html'));
+app.get('/impressum', sendPublic('legal/impressum.html'));
+app.get('/datenschutz', sendPublic('legal/datenschutz.html'));
+
+// ─── Authenticated SPA shell (hash-routed) ────────────────────────────────
+
+app.get(['/app', '/app/*'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app.html'));
 });
+
+// ─── Fallback: unknown paths go to the marketing home ─────────────────────
+
+app.get('*', (req, res) => res.redirect('/'));
 
 // ─── Error handler ────────────────────────────────────────────────────────
 

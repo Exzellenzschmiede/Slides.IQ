@@ -1084,8 +1084,13 @@ function bindGenerationEvents() {
     hideStreamOverlay();
     document.querySelectorAll('.plan-creating-status').forEach(el => el.remove());
     if (e.detail.status !== 'cancelled') {
-      addChatMessage('assistant', t('studio.assistantError', { msg: e.detail.error || 'Fehler' }));
-      toastError(e.detail.error || 'Generierung fehlgeschlagen');
+      // Quota/feature limit → show an upgrade prompt instead of a plain error.
+      if (e.detail.limitInfo) {
+        showUpgradeModal(e.detail.limitInfo);
+      } else {
+        addChatMessage('assistant', t('studio.assistantError', { msg: e.detail.error || 'Fehler' }));
+        toastError(e.detail.error || 'Generierung fehlgeschlagen');
+      }
     }
     document.getElementById('chat-input')?.focus();
   };
@@ -1637,6 +1642,29 @@ window.presenterGoto = (dir) => {
     '*'
   );
 };
+
+// ─── Upgrade prompt (shown when an entitlement limit is hit) ──────────────
+
+function showUpgradeModal(info) {
+  const to = info?.upgrade?.to || 'pro';
+  const planName = to.charAt(0).toUpperCase() + to.slice(1);
+  const hasCheckout = info?.upgrade?.hasCheckout !== false;
+  const body = `
+    <div style="text-align:center;padding:8px 4px">
+      <div style="font-size:40px;margin-bottom:8px">✦</div>
+      <p style="color:var(--text-muted);margin-bottom:18px">${escHtml(info?.error || t('billing.limitReachedTitle') || 'Limit erreicht')}</p>
+      <div style="display:flex;gap:10px;justify-content:center">
+        ${hasCheckout ? `<button class="btn btn-primary" id="upgrade-go">${(t('billing.upgradeTo') || 'Upgrade {{plan}}').replace('{{plan}}', planName)}</button>` : ''}
+        <button class="btn btn-ghost" id="upgrade-cancel">${t('common.cancel') || 'Schließen'}</button>
+      </div>
+    </div>`;
+  showModal(t('billing.limitReachedTitle') || 'Limit erreicht', body);
+  document.getElementById('upgrade-cancel')?.addEventListener('click', () => closeModal());
+  document.getElementById('upgrade-go')?.addEventListener('click', async () => {
+    try { const { url } = await api.billing.checkout(to); window.location = url; }
+    catch (err) { toastError(err.message); }
+  });
+}
 
 // ─── Utilities ────────────────────────────────────────────────────────────
 
