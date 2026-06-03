@@ -147,7 +147,14 @@ export const api = {
     aiSettings: {
       get: () => apiFetch('/admin/ai-settings'),
       update: (data) => apiFetch('/admin/ai-settings', { method: 'PUT', body: data })
-    }
+    },
+    setUserPlan: (userId, plan) => apiFetch(`/admin/users/${userId}/plan`, { method: 'PUT', body: { plan } }),
+  },
+
+  billing: {
+    me: () => apiFetch('/billing/me'),
+    checkout: (plan) => apiFetch('/billing/checkout', { method: 'POST', body: { plan } }),
+    portal: () => apiFetch('/billing/portal', { method: 'POST' }),
   },
 
   auth: {

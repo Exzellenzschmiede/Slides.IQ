@@ -168,7 +168,14 @@ function showNewModal(templates) {
       closeModal();
       navigate('studio', { id: p.id });
     } catch (err) {
-      toastError(t('dashboard.errorCreate', { msg: err.message }));
+      // Plan limit on stored presentations → guide to billing instead of a bare error.
+      if (err.status === 402) {
+        closeModal();
+        toastError(err.message);
+        navigate('settings');
+      } else {
+        toastError(t('dashboard.errorCreate', { msg: err.message }));
+      }
     }
   });
 }

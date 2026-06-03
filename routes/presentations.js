@@ -5,6 +5,7 @@ const { v4: uuid } = require('uuid');
 const QRCode = require('qrcode');
 const db = require('../database');
 const { exportPdf } = require('../services/pdf');
+const { requireCanCreatePresentation, requireFeature } = require('../middleware/entitlements');
 
 const router = express.Router();
 
@@ -93,7 +94,7 @@ router.get('/', (req, res) => {
 
 // ─── Create ───────────────────────────────────────────────────────────────
 
-router.post('/', (req, res) => {
+router.post('/', requireCanCreatePresentation, (req, res) => {
   const { title, description, template_id, tags } = req.body;
   if (!title) return res.status(400).json({ error: 'title required' });
 
@@ -313,7 +314,7 @@ router.delete('/:id/user-shares/:userId', (req, res) => {
 
 // ─── PDF Export ───────────────────────────────────────────────────────────
 
-router.get('/:id/export/pdf', async (req, res) => {
+router.get('/:id/export/pdf', requireFeature('exportPdf'), async (req, res) => {
   if (!assertAccess(req, res, 'read')) return;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
   if (!row?.html_content) return res.status(400).json({ error: 'No content yet' });
@@ -331,7 +332,7 @@ router.get('/:id/export/pdf', async (req, res) => {
 
 // ─── HTML Export ──────────────────────────────────────────────────────────
 
-router.get('/:id/export/html', (req, res) => {
+router.get('/:id/export/html', requireFeature('exportHtml'), (req, res) => {
   if (!assertAccess(req, res, 'read')) return;
   const row = db.prepare('SELECT * FROM presentations WHERE id = ?').get(req.params.id);
   if (!row?.html_content) return res.status(400).json({ error: 'No content yet' });

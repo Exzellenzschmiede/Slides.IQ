@@ -247,6 +247,7 @@ async function loadUsers() {
             <th style="${thStyle}">${t('admin.colName')}</th>
             <th style="${thStyle}">${t('admin.colEmail')}</th>
             <th style="${thStyle}">${t('admin.colRole')}</th>
+            <th style="${thStyle}">${t('admin.colPlan') || 'Tarif'}</th>
             <th style="${thStyle}">Status</th>
             <th></th>
           </tr>
@@ -268,6 +269,11 @@ async function loadUsers() {
                     ${escHtml(u.role)} ⇄
                   </button>
                 ` : `<span class="tag" style="${u.role === 'admin' ? 'background:rgba(124,58,237,.2);color:#a78bfa' : ''}">${escHtml(u.role)}</span>`}
+              </td>
+              <td style="padding:10px 8px">
+                <select class="form-select" style="font-size:12px;padding:4px 6px" data-action="set-plan" data-uid="${escHtml(u.id)}">
+                  ${['free','pro','business'].map(p => `<option value="${p}" ${(u.plan||'free')===p?'selected':''}>${p}</option>`).join('')}
+                </select>
               </td>
               <td style="padding:10px 8px">
                 <span class="tag" style="${activeStyle}">${activeLabel}</span>
@@ -299,6 +305,11 @@ async function loadUsers() {
       btn.addEventListener('click', () => toggleActive(btn.dataset.uid, btn.dataset.name, btn.dataset.active)));
     list.querySelectorAll('[data-action="edit"]').forEach(btn =>
       btn.addEventListener('click', () => showEditUserForm(btn.dataset.uid, btn.dataset.name, btn.dataset.email, btn.dataset.role)));
+    list.querySelectorAll('[data-action="set-plan"]').forEach(sel =>
+      sel.addEventListener('change', async () => {
+        try { await api.admin.setUserPlan(sel.dataset.uid, sel.value); toastSuccess(t('admin.planChanged') || 'Tarif aktualisiert'); }
+        catch (err) { toastError(err.message); loadUsers(); }
+      }));
     document.getElementById('add-user-btn')?.addEventListener('click', showAddUserForm);
   } catch (err) {
     list.innerHTML = `<p style="color:var(--danger)">${escHtml(err.message)}</p>`;

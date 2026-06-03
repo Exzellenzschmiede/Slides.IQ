@@ -66,7 +66,7 @@ router.post('/login', async (req, res) => {
 // ─── Self-service registration ─────────────────────────────────────────────
 
 const VERIFY_URL = (raw) => `${email.BASE_URL}/api/auth/verify?token=${raw}`;
-const RESET_URL = (raw) => `${email.BASE_URL}/reset-password?token=${raw}`;
+const RESET_URL = (raw) => `${email.BASE_URL}/app?flow=reset&token=${raw}`;
 
 router.post('/register', async (req, res) => {
   const { name, email: rawEmail, password } = req.body;
@@ -197,7 +197,14 @@ router.put('/me/password', requireAuth, async (req, res) => {
 // ─── Admin: User list ─────────────────────────────────────────────────────
 
 router.get('/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, email, name, role, is_active, created_at FROM users ORDER BY created_at ASC').all();
+  const users = db.prepare(`
+    SELECT u.id, u.email, u.name, u.role, u.is_active, u.created_at, u.email_verified,
+           COALESCE(s.admin_override_plan, s.plan, 'free') AS plan,
+           s.status AS sub_status, (s.admin_override_plan IS NOT NULL) AS plan_overridden
+    FROM users u
+    LEFT JOIN subscriptions s ON s.user_id = u.id
+    ORDER BY u.created_at ASC
+  `).all();
   res.json(users);
 });
 

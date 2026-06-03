@@ -52,6 +52,11 @@ wss.on('connection', (ws, req) => {
 
 app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
+
+// Stripe webhook needs the RAW body for signature verification — must be
+// registered BEFORE the global express.json() parser.
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), require('./routes/billing').webhookHandler);
+
 app.use(express.json({ limit: '50mb' }));
 
 // Fail fast in production if the session secret is missing/default.
@@ -111,6 +116,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/presentations', requireAuth, require('./routes/presentations'));
 app.use('/api/templates', requireAuth, require('./routes/templates'));
 app.use('/api/ai', requireAuth, aiLimiter, require('./routes/ai'));
+app.use('/api/billing', requireAuth, require('./routes/billing').router);
 
 // ─── Settings API (user-scoped) ───────────────────────────────────────────
 
@@ -159,6 +165,24 @@ app.put('/api/admin/ai-settings', requireAdmin, (req, res) => {
   if (aiProviders) prefs.aiProviders = aiProviders;
   db.prepare("INSERT OR REPLACE INTO settings (key, value, user_id) VALUES ('preferences', ?, '')").run(JSON.stringify(prefs));
   res.json({ ok: true });
+});
+
+// ─── Admin: per-user plan override ────────────────────────────────────────
+
+app.put('/api/admin/users/:id/plan', requireAdmin, (req, res) => {
+  const db = require('./database');
+  const { plan } = req.body; // 'free' | 'pro' | 'business' | null (clear override)
+  if (plan && !['free', 'pro', 'business'].includes(plan)) {
+    return res.status(400).json({ error: 'Ungültiger Tarif' });
+  }
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
+  db.prepare(`
+    INSERT INTO subscriptions (user_id, admin_override_plan, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET admin_override_plan = excluded.admin_override_plan, updated_at = datetime('now')
+  `).run(req.params.id, plan || null);
+  res.json({ ok: true, plan: plan || null });
 });
 
 // ─── Admin: Framework migration ───────────────────────────────────────────
