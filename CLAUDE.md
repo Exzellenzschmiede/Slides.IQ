@@ -10,7 +10,7 @@ npm start            # production server (node server.js)
 npm run dev          # development server with hot-reload (node --watch server.js)
 ```
 
-No `.env` file required. AI API keys are configured in the Admin panel (stored in the DB). The only relevant env vars are `PORT`, `SESSION_SECRET`, `BASE_URL`, `DB_PATH` — all optional for local dev.
+No `.env` file required. AI API keys, **SMTP/email**, and **Stripe** settings are all configured in the Admin panel (stored in the DB). The only relevant env vars are `PORT`, `SESSION_SECRET`, `DB_PATH` — all optional for local dev. Legacy `SMTP_*`, `STRIPE_*`, and `BASE_URL` env vars are still read as a one-time migration fallback, but the Admin panel always wins.
 
 No test suite or linter is configured.
 
@@ -26,8 +26,12 @@ No test suite or linter is configured.
 - `routes/ai.js` — All AI endpoints under `/api/ai` (rate-limited to 10 req/min). Reads the active provider + API key from admin settings via `services/aiProvider.js` — **never from env**. Returns 400 JSON before SSE headers if no key is configured.
 - `routes/presentations.js` — CRUD + versioning (inline JSON array, max 20) + per-user shares + public token sharing + export (PDF via Puppeteer, HTML download).
 - `routes/templates.js` — CRUD + `POST /from-pptx` (multer → parse PPTX → AI → return template suggestion without saving).
-- `routes/admin.js` — `GET/PUT /api/admin/ai-settings` — global AI provider config (admin only).
+- Admin settings endpoints live directly in `server.js` (not a separate router): `GET/PUT /api/admin/ai-settings` (global AI provider), `GET/PUT /api/admin/email-settings` (SMTP), `GET/PUT /api/admin/stripe-settings` (Stripe keys + Price IDs), plus per-user plan override and framework migration. All `requireAdmin`.
+- `services/appSettings.js` — Single source of truth for global **email** and **stripe** config groups (settings table, `user_id=''`). Exports `getEmailSettings()/setEmailSettings()`, `getStripeSettings()/setStripeSettings()`, `getBaseUrl()`. Unset fields fall back to the matching env var (migration only); saved values always win.
 - `services/aiProvider.js` — Resolves the active provider, API key, and model from the `preferences` settings row. Exports `getGlobalPrefs()`, `getProviderSettings()`, `DEFAULT_MODELS`.
+- `services/email.js` — Reads SMTP config from `appSettings` at send time (caches the nodemailer transport, rebuilds on change). Falls back to console logging in dev. Exports `getBaseUrl()` for link building.
+- `services/stripe.js` — `getStripe()` factory: builds/caches a Stripe client from the Admin-managed secret key, rebuilt when the key changes; returns `null` if unset.
+- `services/plans.js` — Static tier limits/features; Stripe Price IDs resolved dynamically from `appSettings` at call time via `getPlan()` / `planForPriceId()` / `publicPlans()`.
 - `services/claude.js` — Multi-provider AI client. `generatePresentation()` dispatches to Anthropic/OpenAI/Mistral/Gemini based on `provider` param. `analyzeNarrativeArc()` and `suggestImprovements()` are Anthropic-only. Contains the full `PRESENTATION_FRAMEWORK` constant (CSS + JS engine injected into every HTML output). `injectFramework()` / `stripFramework()` keep the engine in sync on updates.
 - `services/fileParser.js` — `parseFile()` dispatches by extension/mime to text, image (base64), CSV, Excel (ExcelJS), Word (Mammoth), PDF (pdf-parse), or PPTX (adm-zip). `parsePptxForTemplate()` additionally extracts theme colors and fonts from `ppt/theme/theme1.xml`.
 - `services/pdf.js` — Puppeteer renders each slide at 1280×720 and assembles a multi-page PDF.
@@ -42,7 +46,7 @@ Single-page app in `public/`. All JS is ES modules imported via `<script type="m
 - `public/js/api.js` — Centralised fetch wrapper (`apiFetch`). Exports `api` object with namespaced methods. Streaming generation is an `async function*` (`readSseStream`) that reads SSE chunks.
 - `public/js/i18n.js` — All UI strings for 5 locales (en/de/it/nl/pl). Use `t('key')` to access.
 - `public/js/views/studio.js` — Main editing UI: chat sidebar, file attachment chips, SSE streaming display, preview `<iframe>`, version history, narrative arc analysis, AI suggestions, PDF/HTML export, presenter mode (WebSocket).
-- `public/js/views/admin.js` — Admin-only view: global AI provider tabs (Anthropic/OpenAI/Mistral/Gemini) with API key + model config, and full user management table (create, edit, toggle active, change role, reset password with auto-generate).
+- `public/js/views/admin.js` — Admin-only view with tabs: AI provider config (Anthropic/OpenAI/Mistral/Gemini), E-Mail (SMTP) settings, Stripe settings (keys + Price IDs), and a full user management table (create, edit, toggle active, change role, reset password with auto-generate).
 - `public/js/views/settings.js` — Per-user brand settings, profile (name/email), password change, language — all auto-saved with 800 ms debounce.
 - `public/js/views/templates.js` — Template gallery + create/edit modals + PPTX import flow.
 - `public/js/components/modal.js` — Single shared modal: `showModal(title, content)`, `closeModal()`, `showConfirmModal()`. Cancel buttons use `closeModal()` via event listeners (not inline onclick).
@@ -64,3 +68,6 @@ Templates provide a `system_prompt` (style instructions) and a `theme` JSON `{pr
 
 **API key management:**
 Keys are stored in the `settings` table under key `preferences`, user_id `''` (global). `services/aiProvider.js` reads them. The AI routes check for a key and return a descriptive 400 error before starting any SSE stream. No env variable fallback exists.
+
+**Email & Stripe config:**
+SMTP and Stripe settings are stored in the `settings` table under keys `email` and `stripe` (user_id `''`), managed via the Admin panel and read through `services/appSettings.js`. Each field falls back to its legacy env var only when unset in the DB (one-time migration aid). Since both are resolved at call time, changing them in the Admin panel takes effect without a restart. The Base URL (email links, Stripe redirects, share links) lives in the `email` group.

@@ -5,12 +5,14 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    # Load the full configuration (SMTP_*, STRIPE_*, BASE_URL, SESSION_SECRET, …)
-    # from .env INTO the container. Without this the SMTP_* vars are absent in the
-    # container and the mailer falls back to dev mode (it only logs the email
-    # instead of sending it via Postfix).
+    # SMTP and Stripe are now configured in the Admin panel (persisted in the
+    # nexus-data volume), NOT via env vars. .env is optional here — load it only
+    # for SESSION_SECRET / PORT and as a legacy migration fallback for the old
+    # SMTP_*/STRIPE_*/BASE_URL vars. `required: false` lets the container boot
+    # even when no .env file exists.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - NODE_ENV=production
     # Allow the container to reach the Postfix relay on the VPS host through

@@ -148,6 +148,14 @@ export const api = {
       get: () => apiFetch('/admin/ai-settings'),
       update: (data) => apiFetch('/admin/ai-settings', { method: 'PUT', body: data })
     },
+    emailSettings: {
+      get: () => apiFetch('/admin/email-settings'),
+      update: (data) => apiFetch('/admin/email-settings', { method: 'PUT', body: data })
+    },
+    stripeSettings: {
+      get: () => apiFetch('/admin/stripe-settings'),
+      update: (data) => apiFetch('/admin/stripe-settings', { method: 'PUT', body: data })
+    },
     setUserPlan: (userId, plan) => apiFetch(`/admin/users/${userId}/plan`, { method: 'PUT', body: { plan } }),
   },
 

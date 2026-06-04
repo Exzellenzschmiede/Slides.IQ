@@ -167,6 +167,30 @@ app.put('/api/admin/ai-settings', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Admin: Global email (SMTP) settings ──────────────────────────────────
+
+app.get('/api/admin/email-settings', requireAdmin, (req, res) => {
+  const { getEmailSettings } = require('./services/appSettings');
+  res.json(getEmailSettings());
+});
+
+app.put('/api/admin/email-settings', requireAdmin, (req, res) => {
+  const { setEmailSettings } = require('./services/appSettings');
+  res.json(setEmailSettings(req.body || {}));
+});
+
+// ─── Admin: Global Stripe settings ─────────────────────────────────────────
+
+app.get('/api/admin/stripe-settings', requireAdmin, (req, res) => {
+  const { getStripeSettings } = require('./services/appSettings');
+  res.json(getStripeSettings());
+});
+
+app.put('/api/admin/stripe-settings', requireAdmin, (req, res) => {
+  const { setStripeSettings } = require('./services/appSettings');
+  res.json(setStripeSettings(req.body || {}));
+});
+
 // ─── Admin: per-user plan override ────────────────────────────────────────
 
 app.put('/api/admin/users/:id/plan', requireAdmin, (req, res) => {

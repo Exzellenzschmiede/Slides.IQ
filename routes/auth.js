@@ -65,8 +65,8 @@ router.post('/login', async (req, res) => {
 
 // ─── Self-service registration ─────────────────────────────────────────────
 
-const VERIFY_URL = (raw) => `${email.BASE_URL}/api/auth/verify?token=${raw}`;
-const RESET_URL = (raw) => `${email.BASE_URL}/app?flow=reset&token=${raw}`;
+const VERIFY_URL = (raw) => `${email.getBaseUrl()}/api/auth/verify?token=${raw}`;
+const RESET_URL = (raw) => `${email.getBaseUrl()}/app?flow=reset&token=${raw}`;
 
 router.post('/register', async (req, res) => {
   const { name, email: rawEmail, password } = req.body;

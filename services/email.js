@@ -1,34 +1,36 @@
 'use strict';
 
 // ─── Email service ─────────────────────────────────────────────────────────
-// Sends via a Postfix relay on the host (host.docker.internal:25, no auth).
-// If SMTP_HOST is unset, falls back to dev mode: the full message incl. the
-// link is logged to the console with an [email:dev] prefix — so the whole
+// Sends via the SMTP relay configured in the Admin panel (host/port/auth read
+// from the DB via services/appSettings, with .env as a migration fallback).
+// If no SMTP host is configured, falls back to dev mode: the full message incl.
+// the link is logged to the console with an [email:dev] prefix — so the whole
 // verification/reset flow is testable with zero email infrastructure.
 
 const nodemailer = require('nodemailer');
-
-const FROM = process.env.SMTP_FROM || 'Slides.IQ <noreply@exzellenzschmiede.de>';
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const { getEmailSettings, getBaseUrl } = require('./appSettings');
 
 let _transport = null;
+let _cacheKey = null;
 function transport() {
-  if (_transport) return _transport;
-  if (!process.env.SMTP_HOST) return null; // dev mode
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const s = getEmailSettings();
+  if (!s.host) { _transport = null; _cacheKey = null; return null; } // dev mode
+  // Rebuild the transport when the relevant connection settings change.
+  const key = JSON.stringify([s.host, s.port, s.secure, s.user, s.pass]);
+  if (_transport && _cacheKey === key) return _transport;
   _transport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '25', 10),
-    secure: String(process.env.SMTP_SECURE).toLowerCase() === 'true',
-    auth: (user && pass) ? { user, pass } : undefined, // Postfix relay: no auth
+    host: s.host,
+    port: s.port,
+    secure: s.secure,
+    auth: (s.user && s.pass) ? { user: s.user, pass: s.pass } : undefined, // Postfix relay: no auth
     tls: { rejectUnauthorized: false }, // trusted local/plaintext relay
   });
+  _cacheKey = key;
   return _transport;
 }
 
 function isConfigured() {
-  return !!process.env.SMTP_HOST;
+  return !!getEmailSettings().host;
 }
 
 async function sendMail({ to, subject, html, text }) {
@@ -38,7 +40,7 @@ async function sendMail({ to, subject, html, text }) {
     console.log(`\n[email:dev] → ${to}\n[email:dev] subject: ${subject}\n[email:dev] ${text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}\n`);
     return { dev: true };
   }
-  return tx.sendMail({ from: FROM, to, subject, html, text });
+  return tx.sendMail({ from: getEmailSettings().from, to, subject, html, text });
 }
 
 // ─── Templates ─────────────────────────────────────────────────────────────
@@ -94,4 +96,4 @@ async function sendPasswordResetEmail(to, name, resetUrl, locale = 'de') {
   }
 }
 
-module.exports = { isConfigured, sendMail, sendVerificationEmail, sendPasswordResetEmail, BASE_URL };
+module.exports = { isConfigured, sendMail, sendVerificationEmail, sendPasswordResetEmail, getBaseUrl };

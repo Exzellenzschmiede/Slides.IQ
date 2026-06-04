@@ -5,6 +5,7 @@ const { v4: uuid } = require('uuid');
 const QRCode = require('qrcode');
 const db = require('../database');
 const { exportPdf } = require('../services/pdf');
+const { getBaseUrl } = require('../services/appSettings');
 const { requireCanCreatePresentation, requireFeature } = require('../middleware/entitlements');
 
 const router = express.Router();
@@ -252,8 +253,7 @@ router.post('/:id/share', async (req, res) => {
     db.prepare('UPDATE presentations SET share_token = ? WHERE id = ?').run(token, req.params.id);
   }
 
-  const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-  const shareUrl = `${baseUrl}/view/${token}`;
+  const shareUrl = `${getBaseUrl()}/view/${token}`;
   const qrDataUrl = await QRCode.toDataURL(shareUrl, { width: 256, margin: 2, color: { dark: '#7c3aed', light: '#ffffff' } });
   res.json({ token, shareUrl, qrDataUrl });
 });

@@ -58,9 +58,12 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. On first launch you will be prompted to create an admin account. After setup, go to **Administration → KI-Anbieter** to enter your AI provider API key.
+Open `http://localhost:3000`. On first launch you will be prompted to create an admin account. After setup, go to **Administration** to configure:
+- **KI-Anbieter** — AI provider API keys + models
+- **E-Mail (SMTP)** — SMTP host/port/auth, sender, and the Base URL for links
+- **Stripe** — secret key, webhook signing secret, and subscription Price IDs
 
-> **Note:** The app no longer reads `ANTHROPIC_API_KEY` from `.env` for generation. All API keys are configured through the Admin panel and stored in the database.
+> **Note:** AI keys, SMTP, and Stripe settings are **no longer read from `.env`** — they are configured through the Admin panel and stored in the database (changes take effect without a restart). Legacy `SMTP_*`, `STRIPE_*`, and `BASE_URL` env vars are still honoured as a one-time migration fallback, but Admin-panel values always win.
 
 ---
 
@@ -70,8 +73,9 @@ Open `http://localhost:3000`. On first launch you will be prompted to create an 
 |---|---|---|---|
 | `PORT` | No | `3000` | HTTP server port |
 | `SESSION_SECRET` | No | random | Express session secret — **set this in production** |
-| `BASE_URL` | No | auto-detect | Base URL used in public share links (e.g. `https://slides.example.com`) |
 | `DB_PATH` | No | `./data/nexus.db` | Path to the SQLite database file |
+
+SMTP, Stripe, and the Base URL are configured in the **Admin panel**, not via env vars (see note above). The legacy `SMTP_*`, `STRIPE_*`, and `BASE_URL` variables remain as a migration fallback only.
 
 ---
 

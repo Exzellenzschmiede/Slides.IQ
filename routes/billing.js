@@ -8,12 +8,12 @@
 
 const express = require('express');
 const db = require('../database');
-const stripe = require('../services/stripe');
+const { getStripe } = require('../services/stripe');
+const { getStripeSettings, getBaseUrl } = require('../services/appSettings');
 const { getPlan, planForPriceId, publicPlans } = require('../services/plans');
 const ent = require('../services/entitlements');
 
 const router = express.Router();
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 // ─── Subscription upsert helper ────────────────────────────────────────────
 const upsertSub = db.prepare(`
@@ -52,6 +52,7 @@ router.get('/me', (req, res) => {
 
 // ─── POST /api/billing/checkout { plan } ───────────────────────────────────
 router.post('/checkout', async (req, res) => {
+  const stripe = getStripe();
   if (!stripe) return res.status(400).json({ error: 'Zahlungen sind nicht konfiguriert.' });
   const planId = req.body.plan;
   const plan = getPlan(planId);
@@ -80,8 +81,8 @@ router.post('/checkout', async (req, res) => {
     line_items: [{ price: plan.stripePriceId, quantity: 1 }],
     client_reference_id: userId,
     subscription_data: { metadata: { userId } },
-    success_url: `${BASE_URL}/app#settings?billing=success`,
-    cancel_url: `${BASE_URL}/app#settings?billing=cancel`,
+    success_url: `${getBaseUrl()}/app#settings?billing=success`,
+    cancel_url: `${getBaseUrl()}/app#settings?billing=cancel`,
     allow_promotion_codes: true,
   });
   res.json({ url: session.url });
@@ -89,12 +90,13 @@ router.post('/checkout', async (req, res) => {
 
 // ─── POST /api/billing/portal ──────────────────────────────────────────────
 router.post('/portal', async (req, res) => {
+  const stripe = getStripe();
   if (!stripe) return res.status(400).json({ error: 'Zahlungen sind nicht konfiguriert.' });
   const sub = ent.getSubscription(req.session.userId);
   if (!sub?.stripe_customer_id) return res.status(400).json({ error: 'Kein Abo vorhanden.' });
   const session = await stripe.billingPortal.sessions.create({
     customer: sub.stripe_customer_id,
-    return_url: `${BASE_URL}/app#settings`,
+    return_url: `${getBaseUrl()}/app#settings`,
   });
   res.json({ url: session.url });
 });
@@ -108,11 +110,13 @@ function userIdForCustomer(customerId) {
 }
 
 function webhookHandler(req, res) {
-  if (!stripe) return res.status(400).end();
+  const stripe = getStripe();
+  const { webhookSecret } = getStripeSettings();
+  if (!stripe || !webhookSecret) return res.status(400).end();
   const sig = req.headers['stripe-signature'];
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
     console.error('[stripe] webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);

@@ -120,6 +120,12 @@ export async function renderAdmin(container) {
       <button class="admin-tab active" data-admin-tab="ai">
         <span class="admin-tab-icon">⚙</span> KI-Anbieter
       </button>
+      <button class="admin-tab" data-admin-tab="email">
+        <span class="admin-tab-icon">✉</span> E-Mail (SMTP)
+      </button>
+      <button class="admin-tab" data-admin-tab="stripe">
+        <span class="admin-tab-icon">💳</span> Stripe
+      </button>
       <button class="admin-tab" data-admin-tab="users">
         <span class="admin-tab-icon">👥</span> Benutzerverwaltung
       </button>
@@ -127,6 +133,18 @@ export async function renderAdmin(container) {
 
     <div id="admin-panel-ai" class="admin-panel active" style="max-width:900px">
       <div class="card" id="ai-settings-card">
+        <div class="text-muted text-sm">Lade…</div>
+      </div>
+    </div>
+
+    <div id="admin-panel-email" class="admin-panel" style="max-width:900px">
+      <div class="card" id="email-settings-card">
+        <div class="text-muted text-sm">Lade…</div>
+      </div>
+    </div>
+
+    <div id="admin-panel-stripe" class="admin-panel" style="max-width:900px">
+      <div class="card" id="stripe-settings-card">
         <div class="text-muted text-sm">Lade…</div>
       </div>
     </div>
@@ -148,6 +166,8 @@ export async function renderAdmin(container) {
   });
 
   loadAiSettings();
+  loadEmailSettings();
+  loadStripeSettings();
   loadUsers();
 }
 
@@ -205,6 +225,167 @@ async function saveAiSettings() {
     await api.admin.aiSettings.update({ aiProvider, aiProviders });
     if (statusEl) { statusEl.textContent = '✓ Gespeichert'; statusEl.style.color = 'var(--success)'; }
     setTimeout(() => { if (statusEl) { statusEl.textContent = ''; } }, 2500);
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = err.message; statusEl.style.color = 'var(--danger)'; }
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Speichern'; }
+  }
+}
+
+// ─── Email (SMTP) Settings ─────────────────────────────────────────────────
+
+async function loadEmailSettings() {
+  const card = document.getElementById('email-settings-card');
+  if (!card) return;
+  try {
+    const s = await api.admin.emailSettings.get();
+    card.innerHTML = `
+      <p class="text-muted text-sm" style="margin:0 0 16px">
+        SMTP-Zugang für Verifizierungs- und Passwort-Reset-Mails. Ist kein Host gesetzt,
+        werden E-Mails nur in der Server-Konsole protokolliert (Dev-Modus).
+      </p>
+      <div class="form-group">
+        <label class="form-label">SMTP-Host</label>
+        <input type="text" class="form-input" id="email-host" value="${escHtml(s.host || '')}" placeholder="host.docker.internal" autocomplete="off">
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Port</label>
+          <input type="number" class="form-input" id="email-port" value="${escHtml(s.port ?? 25)}" placeholder="25">
+        </div>
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Verschlüsselung</label>
+          <select class="form-select" id="email-secure">
+            <option value="false" ${!s.secure ? 'selected' : ''}>STARTTLS / keine (Port 25/587)</option>
+            <option value="true" ${s.secure ? 'selected' : ''}>SSL/TLS (Port 465)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Absender (From)</label>
+        <input type="text" class="form-input" id="email-from" value="${escHtml(s.from || '')}" placeholder="Slides.IQ &lt;noreply@example.com&gt;" autocomplete="off">
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">SMTP-Benutzer <span class="text-muted text-xs">(optional)</span></label>
+          <input type="text" class="form-input" id="email-user" value="${escHtml(s.user || '')}" placeholder="leer = ohne Auth" autocomplete="off">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">SMTP-Passwort <span class="text-muted text-xs">(optional)</span></label>
+          <div class="password-wrapper">
+            <input type="password" class="form-input" id="email-pass" value="${escHtml(s.pass || '')}" placeholder="leer = ohne Auth" autocomplete="off">
+            <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Basis-URL <span class="text-muted text-xs">(für Links in E-Mails &amp; Freigaben)</span></label>
+        <input type="text" class="form-input" id="email-baseurl" value="${escHtml(s.baseUrl || '')}" placeholder="https://app.example.com" autocomplete="off">
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <button class="btn btn-primary btn-sm" id="email-settings-save">Speichern</button>
+        <span id="email-settings-status" style="font-size:13px;color:var(--text-muted)"></span>
+      </div>
+    `;
+    initPasswordToggles(card);
+    document.getElementById('email-settings-save').addEventListener('click', saveEmailSettings);
+  } catch (err) {
+    card.innerHTML = `<p style="color:var(--danger)">${escHtml(err.message)}</p>`;
+  }
+}
+
+async function saveEmailSettings() {
+  const statusEl = document.getElementById('email-settings-status');
+  const saveBtn = document.getElementById('email-settings-save');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Speichert…'; }
+  const payload = {
+    host: document.getElementById('email-host').value.trim(),
+    port: parseInt(document.getElementById('email-port').value, 10) || 25,
+    secure: document.getElementById('email-secure').value === 'true',
+    from: document.getElementById('email-from').value.trim(),
+    user: document.getElementById('email-user').value.trim(),
+    pass: document.getElementById('email-pass').value,
+    baseUrl: document.getElementById('email-baseurl').value.trim(),
+  };
+  try {
+    await api.admin.emailSettings.update(payload);
+    if (statusEl) { statusEl.textContent = '✓ Gespeichert'; statusEl.style.color = 'var(--success)'; }
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = err.message; statusEl.style.color = 'var(--danger)'; }
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Speichern'; }
+  }
+}
+
+// ─── Stripe Settings ───────────────────────────────────────────────────────
+
+const STRIPE_FIELDS = [
+  { id: 'secretKey',           label: 'Secret Key',                 placeholder: 'sk_live_… / sk_test_…', secret: true },
+  { id: 'webhookSecret',       label: 'Webhook Signing Secret',     placeholder: 'whsec_…',               secret: true },
+  { id: 'pricePro',            label: 'Price ID — Pro (monatlich)', placeholder: 'price_…',               secret: false },
+  { id: 'priceProAnnual',      label: 'Price ID — Pro (jährlich)',  placeholder: 'price_… (optional)',    secret: false },
+  { id: 'priceBusiness',       label: 'Price ID — Business (monatlich)', placeholder: 'price_…',          secret: false },
+  { id: 'priceBusinessAnnual', label: 'Price ID — Business (jährlich)',  placeholder: 'price_… (optional)', secret: false },
+];
+
+function stripeFieldHtml(f, value) {
+  if (f.secret) {
+    return `
+      <div class="form-group">
+        <label class="form-label">${f.label}</label>
+        <div class="password-wrapper">
+          <input type="password" class="form-input" id="stripe-${f.id}" value="${escHtml(value || '')}" placeholder="${f.placeholder}" autocomplete="off">
+          <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="form-group">
+      <label class="form-label">${f.label}</label>
+      <input type="text" class="form-input" id="stripe-${f.id}" value="${escHtml(value || '')}" placeholder="${f.placeholder}" autocomplete="off">
+    </div>`;
+}
+
+async function loadStripeSettings() {
+  const card = document.getElementById('stripe-settings-card');
+  if (!card) return;
+  try {
+    const s = await api.admin.stripeSettings.get();
+    card.innerHTML = `
+      <p class="text-muted text-sm" style="margin:0 0 16px">
+        Stripe-Schlüssel und Price IDs für Abonnements. Ohne Secret Key sind Zahlungen deaktiviert.
+        Der Webhook-Endpoint ist <code>/api/billing/webhook</code>.
+      </p>
+      ${STRIPE_FIELDS.map(f => stripeFieldHtml(f, s[f.id])).join('')}
+      <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <button class="btn btn-primary btn-sm" id="stripe-settings-save">Speichern</button>
+        <span id="stripe-settings-status" style="font-size:13px;color:var(--text-muted)"></span>
+      </div>
+    `;
+    initPasswordToggles(card);
+    document.getElementById('stripe-settings-save').addEventListener('click', saveStripeSettings);
+  } catch (err) {
+    card.innerHTML = `<p style="color:var(--danger)">${escHtml(err.message)}</p>`;
+  }
+}
+
+async function saveStripeSettings() {
+  const statusEl = document.getElementById('stripe-settings-status');
+  const saveBtn = document.getElementById('stripe-settings-save');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Speichert…'; }
+  const payload = {};
+  for (const f of STRIPE_FIELDS) {
+    payload[f.id] = document.getElementById(`stripe-${f.id}`).value.trim();
+  }
+  try {
+    await api.admin.stripeSettings.update(payload);
+    if (statusEl) { statusEl.textContent = '✓ Gespeichert'; statusEl.style.color = 'var(--success)'; }
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
   } catch (err) {
     if (statusEl) { statusEl.textContent = err.message; statusEl.style.color = 'var(--danger)'; }
   } finally {
