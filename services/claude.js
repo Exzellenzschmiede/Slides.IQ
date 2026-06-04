@@ -993,15 +993,25 @@ Rules:
   });
 
   try {
-    const jsonMatch = text.match(/\{[\s\S]+\}/);
+    // Strip markdown code fences some models wrap JSON in, then grab the object.
+    const cleaned = String(text || '').replace(/```(?:json)?/gi, '');
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('no JSON object in response');
     const plan = JSON.parse(jsonMatch[0]);
-    if (!plan.summary || !Array.isArray(plan.outline)) throw new Error('Invalid plan shape');
-    plan.outline = normalizeOutline(plan.outline);
+    // Accept the outline under a few common keys models use.
+    const rawOutline = plan.outline || plan.slides || plan.outlines || [];
+    if (!Array.isArray(rawOutline)) throw new Error('outline is not an array');
+    plan.outline = normalizeOutline(rawOutline);
     plan.slideCount = plan.outline.length;
     plan.action = plan.action === 'insert' ? 'insert' : 'generate';
+    plan.summary = plan.summary || '';
+    if (!plan.outline.length) {
+      console.warn(`[plan] empty outline after parse (provider=${provider}, model=${model}). raw=${String(text).slice(0, 800)}`);
+    }
     return plan;
-  } catch {
-    return { summary: text.substring(0, 200), slideCount: 0, outline: [], action: 'generate' };
+  } catch (e) {
+    console.warn(`[plan] parse failed (provider=${provider}, model=${model}): ${e.message}. raw=${String(text).slice(0, 800)}`);
+    return { summary: String(text || '').substring(0, 200), slideCount: 0, outline: [], action: 'generate' };
   }
 }
 
@@ -1013,11 +1023,15 @@ function normalizeOutline(outline) {
   return outline.map((item) => {
     if (typeof item === 'string') return { title: item.trim(), type: 'content', points: [] };
     if (item && typeof item === 'object') {
-      const title = String(item.title || item.heading || '').trim();
+      // Accept the various title/points keys different models emit.
+      const title = String(item.title || item.heading || item.name || item.label || item.titel || item.slide || '').trim();
       let type = String(item.type || 'content').toLowerCase().trim();
       if (!KNOWN.includes(type)) type = 'content';
-      let points = Array.isArray(item.points) ? item.points : (item.point ? [item.point] : []);
-      points = points.map(p => String(p).trim()).filter(Boolean).slice(0, 4);
+      const rawPoints = Array.isArray(item.points) ? item.points
+        : Array.isArray(item.bullets) ? item.bullets
+        : Array.isArray(item.content) ? item.content
+        : (item.point ? [item.point] : []);
+      const points = rawPoints.map(p => String(typeof p === 'object' ? (p.text || p.title || '') : p).trim()).filter(Boolean).slice(0, 4);
       return { title, type, points };
     }
     return { title: '', type: 'content', points: [] };
