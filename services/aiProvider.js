@@ -121,18 +121,18 @@ async function streamGenerate({ provider, apiKey, model, messages, systemPrompt,
 // ─── generateText ─────────────────────────────────────────────────────────────
 // Returns full generated string without streaming.
 
-async function generateText({ provider, apiKey, model, messages, systemPrompt }) {
+async function generateText({ provider, apiKey, model, messages, systemPrompt, json = false }) {
   provider = provider || 'anthropic';
   model    = model    || DEFAULT_MODELS[provider];
 
   if (provider === 'anthropic') {
-    return _generateTextAnthropic({ apiKey, model, messages, systemPrompt });
+    return _generateTextAnthropic({ apiKey, model, messages, systemPrompt, json });
   } else if (provider === 'openai') {
-    return _generateTextOpenAICompat({ url: 'https://api.openai.com/v1/chat/completions', apiKey, model, messages, systemPrompt });
+    return _generateTextOpenAICompat({ url: 'https://api.openai.com/v1/chat/completions', apiKey, model, messages, systemPrompt, json });
   } else if (provider === 'mistral') {
-    return _generateTextOpenAICompat({ url: 'https://api.mistral.ai/v1/chat/completions', apiKey, model, messages, systemPrompt });
+    return _generateTextOpenAICompat({ url: 'https://api.mistral.ai/v1/chat/completions', apiKey, model, messages, systemPrompt, json });
   } else if (provider === 'gemini') {
-    return _generateTextGemini({ apiKey, model, messages, systemPrompt });
+    return _generateTextGemini({ apiKey, model, messages, systemPrompt, json });
   } else {
     throw new Error(`Unbekannter AI-Provider: ${provider}`);
   }
@@ -203,16 +203,21 @@ async function _streamAnthropic({ apiKey, model, messages, systemPrompt, onChunk
   return { text: fullContent, stopReason };
 }
 
-async function _generateTextAnthropic({ apiKey, model, messages, systemPrompt }) {
+async function _generateTextAnthropic({ apiKey, model, messages, systemPrompt, json = false }) {
   if (!apiKey) throw new Error('Kein API-Key für Anthropic angegeben');
   const client = new Anthropic({ apiKey });
 
   const maxTokens = model.includes('haiku') ? 8000 : 32000;
-  const params = { model, max_tokens: maxTokens, messages };
+  // Force JSON via assistant prefill: the model continues from "{", so the
+  // reply is guaranteed to be a JSON object (no markdown/prose). We prepend the
+  // "{" back to the returned continuation.
+  const msgs = json ? [...messages, { role: 'assistant', content: '{' }] : messages;
+  const params = { model, max_tokens: maxTokens, messages: msgs };
   if (systemPrompt) params.system = systemPrompt;
 
   const response = await client.messages.create(params);
-  return response.content[0]?.text || '';
+  const text = response.content[0]?.text || '';
+  return json ? '{' + text : text;
 }
 
 // ─── OpenAI-compatible implementation (OpenAI + Mistral) ─────────────────────
@@ -258,10 +263,15 @@ async function _streamOpenAICompat({ url, apiKey, model, messages, systemPrompt,
   return { text: fullContent, stopReason };
 }
 
-async function _generateTextOpenAICompat({ url, apiKey, model, messages, systemPrompt }) {
+async function _generateTextOpenAICompat({ url, apiKey, model, messages, systemPrompt, json = false }) {
   if (!apiKey) throw new Error(`Kein API-Key angegeben`);
 
   const oaiMessages = buildOpenAIMessages(messages, systemPrompt);
+
+  const body = { model, messages: oaiMessages, max_tokens: 16000 };
+  // OpenAI & Mistral both support strict JSON output. (Requires the word "json"
+  // in the prompt — the planning prompt contains it.)
+  if (json) body.response_format = { type: 'json_object' };
 
   const response = await fetch(url, {
     method: 'POST',
@@ -269,7 +279,7 @@ async function _generateTextOpenAICompat({ url, apiKey, model, messages, systemP
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ model, messages: oaiMessages, max_tokens: 16000 }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -327,7 +337,7 @@ async function _streamGemini({ apiKey, model, messages, systemPrompt, onChunk })
   return { text: fullContent, stopReason };
 }
 
-async function _generateTextGemini({ apiKey, model, messages, systemPrompt }) {
+async function _generateTextGemini({ apiKey, model, messages, systemPrompt, json = false }) {
   if (!apiKey) throw new Error('Kein API-Key für Gemini angegeben');
 
   const contents = buildGeminiContents(messages);
@@ -335,6 +345,7 @@ async function _generateTextGemini({ apiKey, model, messages, systemPrompt }) {
   if (systemPrompt) {
     body.systemInstruction = { parts: [{ text: systemPrompt }] };
   }
+  if (json) body.generationConfig = { responseMimeType: 'application/json' };
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 

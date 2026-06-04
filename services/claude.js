@@ -990,6 +990,7 @@ Rules:
     model,
     messages: [{ role: 'user', content: planPrompt }],
     systemPrompt: null,
+    json: true, // enforce strict JSON output across all providers (incl. Mistral)
   });
 
   try {
