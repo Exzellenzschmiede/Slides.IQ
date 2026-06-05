@@ -47,7 +47,7 @@ function getEmailSettings() {
     host: pick(s.host, process.env.SMTP_HOST),
     port: parseInt(pick(s.port, process.env.SMTP_PORT, '25'), 10) || 25,
     secure,
-    from: pick(s.from, process.env.SMTP_FROM, 'glowwee <noreply@exzellenzschmiede.de>'),
+    from: pick(s.from, process.env.SMTP_FROM, 'glowwee <noreply@glowwee.com>'),
     user: pick(s.user, process.env.SMTP_USER),
     pass: pick(s.pass, process.env.SMTP_PASS),
     baseUrl: pick(s.baseUrl, process.env.BASE_URL, 'http://localhost:3000'),
