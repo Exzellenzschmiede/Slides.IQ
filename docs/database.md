@@ -1,6 +1,6 @@
 # Database
 
-Slides.IQ uses SQLite via the `better-sqlite3` driver. The database file is created automatically on first run at the path configured by `DB_PATH` (default: `./data/nexus.db`).
+glowwee uses SQLite via the `better-sqlite3` driver. The database file is created automatically on first run at the path configured by `DB_PATH` (default: `./data/nexus.db`).
 
 ---
 

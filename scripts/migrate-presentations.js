@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migrations-Skript: Re-injiziert das aktuelle Slides.IQ Framework
+ * Migrations-Skript: Re-injiziert das aktuelle glowwee Framework
  * in alle bestehenden Präsentationen in der Datenbank.
  *
  * Ausführen:
@@ -32,14 +32,17 @@ for (const row of rows) {
   const html = row.html_content;
 
   // Detect whether the current framework is already up-to-date
-  const hasNewMarker = html.includes('<!-- SLIDESIQ:FRAMEWORK:START -->');
+  const hasNewMarker = html.includes('<!-- GLOWWEE:FRAMEWORK:START -->');
+  const hasLegacyMarker = html.includes('<!-- SLIDESIQ:FRAMEWORK:START -->');
   const hasOldStyle  = html.includes('<style id="nexus-engine-styles">');
   const hasPlaceholder = html.includes('[NEXUS_FRAMEWORK]');
-  const hasNoFramework = !hasNewMarker && !hasOldStyle && !hasPlaceholder;
+  const hasNoFramework = !hasNewMarker && !hasLegacyMarker && !hasOldStyle && !hasPlaceholder;
 
   let reason = '';
-  if (hasNewMarker) {
-    reason = 'altes SLIDESIQ-Marker-Framework → aktualisieren';
+  if (hasNewMarker || hasLegacyMarker) {
+    reason = hasLegacyMarker
+      ? 'altes SLIDESIQ-Marker-Framework → aktualisieren'
+      : 'GLOWWEE-Marker-Framework → aktualisieren';
   } else if (hasOldStyle) {
     reason = 'unmarkiertes altes Framework → neu injizieren';
   } else if (hasPlaceholder) {

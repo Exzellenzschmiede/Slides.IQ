@@ -13,12 +13,16 @@ function getAnthropicClient(apiKey) {
 
 // ─── Core presentation generation system prompt ────────────────────────────
 
-const FRAMEWORK_START = '<!-- SLIDESIQ:FRAMEWORK:START -->';
-const FRAMEWORK_END   = '<!-- SLIDESIQ:FRAMEWORK:END -->';
+const FRAMEWORK_START = '<!-- GLOWWEE:FRAMEWORK:START -->';
+const FRAMEWORK_END   = '<!-- GLOWWEE:FRAMEWORK:END -->';
+// Backwards-compat: marker used before the glowwee rename (was "Slides.IQ").
+// Existing presentations stored in the DB still carry these markers.
+const LEGACY_FRAMEWORK_START = '<!-- SLIDESIQ:FRAMEWORK:START -->';
+const LEGACY_FRAMEWORK_END   = '<!-- SLIDESIQ:FRAMEWORK:END -->';
 
 const PRESENTATION_FRAMEWORK = `${FRAMEWORK_START}
 <style id="nexus-engine-styles">
-/* ═══ SLIDES.IQ PRESENTATION ENGINE (embedded) ═══ */
+/* ═══ GLOWWEE PRESENTATION ENGINE (embedded) ═══ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   width: 100%; height: 100%; overflow: hidden;
@@ -383,7 +387,7 @@ ${designLines.join('\n')}
 Setze diese Parameter konsequent in allen Slides um.
 ` : '';
 
-  return `Du bist Slides.IQ — ein weltklasse AI-Präsentationsarchitekt. Du erstellst atemberaubende, vollständig eigenständige HTML-Präsentationen die Kunst und Technologie verbinden.
+  return `Du bist glowwee — ein weltklasse AI-Präsentationsarchitekt. Du erstellst atemberaubende, vollständig eigenständige HTML-Präsentationen die Kunst und Technologie verbinden.
 
 ${templateSystemPrompt}
 
@@ -619,12 +623,16 @@ function stripFramework(html) {
   // Also strip the injected hardening <style> block so the AI never sees it
   html = html.replace(/<style id="nexus-hardening">[\s\S]*?<\/style>/i, '');
 
-  // Remove new-style marked framework
-  if (html.includes(FRAMEWORK_START)) {
-    const start = html.indexOf(FRAMEWORK_START);
-    const end   = html.indexOf(FRAMEWORK_END);
+  // Remove new-style marked framework (current GLOWWEE marker or legacy SLIDESIQ)
+  const markerStart = html.includes(FRAMEWORK_START) ? FRAMEWORK_START
+                    : html.includes(LEGACY_FRAMEWORK_START) ? LEGACY_FRAMEWORK_START
+                    : null;
+  if (markerStart) {
+    const markerEnd = markerStart === FRAMEWORK_START ? FRAMEWORK_END : LEGACY_FRAMEWORK_END;
+    const start = html.indexOf(markerStart);
+    const end   = html.indexOf(markerEnd);
     if (end !== -1) {
-      return html.slice(0, start) + html.slice(end + FRAMEWORK_END.length);
+      return html.slice(0, start) + html.slice(end + markerEnd.length);
     }
     return html.slice(0, start);
   }
@@ -685,7 +693,7 @@ function injectFramework(rawHtml) {
   // Inject hardening CSS right after the AI's last </style> block (before </head> or early in <body>)
   // This runs after the AI's CSS so it wins the cascade without needing !important everywhere.
   const HARDENING_CSS = `<style id="nexus-hardening">
-/* ── Slides.IQ hardening: wins over AI-generated CSS ── */
+/* ── glowwee hardening: wins over AI-generated CSS ── */
 #nexus-presentation { overflow: hidden !important; }
 #nexus-presentation .slide {
   overflow-x: hidden !important; overflow-y: auto !important;
@@ -866,7 +874,7 @@ async function analyzeTemplateFromPptx({ textContent, themeColors, slideCount },
     max_tokens: 2000,
     messages: [{
       role: 'user',
-      content: `Du analysierst eine PowerPoint-Präsentation (${slideCount} Folien) und erstellst daraus ein Template für Slides.IQ.
+      content: `Du analysierst eine PowerPoint-Präsentation (${slideCount} Folien) und erstellst daraus ein Template für glowwee.
 
 PRÄSENTATIONSINHALT:
 ${textContent.substring(0, 3000)}
@@ -876,7 +884,7 @@ Farben:
 ${colorLines || '  (keine Farbdaten verfügbar)'}
 ${fontLines ? `Schriftarten: ${fontLines}` : ''}
 
-Erstelle ein Slides.IQ Template das den erkannten visuellen Stil widerspiegelt.
+Erstelle ein glowwee Template das den erkannten visuellen Stil widerspiegelt.
 
 Antworte ausschließlich als JSON (kein Markdown):
 {
@@ -1050,7 +1058,7 @@ async function generateSingleSlide({ prompt, slideHtml = '', cssContext = '', su
     ? `\n\nNachbarn-Slides (nur als Stil-Referenz — diese NICHT ausgeben):\n${surroundingSlides.join('\n\n')}`
     : '';
 
-  const systemPrompt = `Du bist Slides.IQ — Experte für einzelne HTML-Präsentations-Slides.
+  const systemPrompt = `Du bist glowwee — Experte für einzelne HTML-Präsentations-Slides.
 Deine Aufgabe: Gib NUR ein einziges <div class="slide"> Element zurück.
 
 REGELN:

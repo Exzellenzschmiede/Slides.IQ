@@ -1,7 +1,7 @@
 {
   "name": "slides-iq",
   "version": "1.0.0",
-  "description": "Slides.IQ — AI-powered presentation hub for stunning HTML presentations",
+  "description": "glowwee — AI-powered presentation hub for stunning HTML presentations",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

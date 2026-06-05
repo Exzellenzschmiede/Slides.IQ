@@ -48,7 +48,7 @@ async function sendMail({ to, subject, html, text }) {
 function shell(title, bodyHtml, ctaUrl, ctaLabel) {
   return `<!DOCTYPE html><html><body style="margin:0;background:#05070f;font-family:Inter,Arial,sans-serif;color:#e2e8f0;padding:32px">
   <div style="max-width:520px;margin:0 auto;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:32px">
-    <div style="font-weight:800;font-size:20px;margin-bottom:20px">◈ Slides.IQ</div>
+    <div style="font-weight:800;font-size:20px;margin-bottom:20px">◈ glowwee</div>
     <h1 style="font-size:22px;margin:0 0 14px">${title}</h1>
     <div style="color:rgba(226,232,240,0.7);font-size:15px;line-height:1.6">${bodyHtml}</div>
     <a href="${ctaUrl}" style="display:inline-block;margin-top:24px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:12px">${ctaLabel}</a>
@@ -58,8 +58,8 @@ function shell(title, bodyHtml, ctaUrl, ctaLabel) {
 
 const COPY = {
   verify: {
-    de: { subject: 'Bestätige deine E-Mail-Adresse', title: 'Willkommen bei Slides.IQ', body: (n) => `Hallo ${n}, bitte bestätige deine E-Mail-Adresse, um dein Konto zu aktivieren.`, cta: 'E-Mail bestätigen' },
-    en: { subject: 'Confirm your email address', title: 'Welcome to Slides.IQ', body: (n) => `Hi ${n}, please confirm your email address to activate your account.`, cta: 'Confirm email' },
+    de: { subject: 'Bestätige deine E-Mail-Adresse', title: 'Willkommen bei glowwee', body: (n) => `Hallo ${n}, bitte bestätige deine E-Mail-Adresse, um dein Konto zu aktivieren.`, cta: 'E-Mail bestätigen' },
+    en: { subject: 'Confirm your email address', title: 'Welcome to glowwee', body: (n) => `Hi ${n}, please confirm your email address to activate your account.`, cta: 'Confirm email' },
   },
   reset: {
     de: { subject: 'Passwort zurücksetzen', title: 'Passwort zurücksetzen', body: (n) => `Hallo ${n}, du hast eine Zurücksetzung deines Passworts angefordert. Der Link ist 1 Stunde gültig. Falls du das nicht warst, ignoriere diese E-Mail.`, cta: 'Neues Passwort setzen' },

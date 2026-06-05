@@ -263,7 +263,7 @@ async function loadEmailSettings() {
       </div>
       <div class="form-group">
         <label class="form-label">Absender (From)</label>
-        <input type="text" class="form-input" id="email-from" value="${escHtml(s.from || '')}" placeholder="Slides.IQ &lt;noreply@example.com&gt;" autocomplete="off">
+        <input type="text" class="form-input" id="email-from" value="${escHtml(s.from || '')}" placeholder="glowwee &lt;noreply@example.com&gt;" autocomplete="off">
       </div>
       <div style="display:flex;gap:12px">
         <div class="form-group" style="flex:1">

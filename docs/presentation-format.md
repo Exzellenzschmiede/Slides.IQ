@@ -1,6 +1,6 @@
 # Presentation HTML Format
 
-Every presentation stored in Slides.IQ is a **self-contained HTML file**. It can be opened directly in a browser without a server. This document describes the structure, conventions, and the injected navigation framework.
+Every presentation stored in glowwee is a **self-contained HTML file**. It can be opened directly in a browser without a server. This document describes the structure, conventions, and the injected navigation framework.
 
 ---
 
@@ -33,10 +33,10 @@ Every presentation stored in Slides.IQ is a **self-contained HTML file**. It can
 
   </div>
 
-  <!-- SLIDESIQ:FRAMEWORK:START -->
+  <!-- GLOWWEE:FRAMEWORK:START -->
   <style>/* Navigation CSS */</style>
   <script>/* Navigation JS */</script>
-  <!-- SLIDESIQ:FRAMEWORK:END -->
+  <!-- GLOWWEE:FRAMEWORK:END -->
 
 </body>
 </html>
@@ -44,14 +44,14 @@ Every presentation stored in Slides.IQ is a **self-contained HTML file**. It can
 
 ---
 
-## SLIDESIQ:FRAMEWORK Markers
+## GLOWWEE:FRAMEWORK Markers
 
 The navigation engine is wrapped in a pair of HTML comments:
 
 ```html
-<!-- SLIDESIQ:FRAMEWORK:START -->
+<!-- GLOWWEE:FRAMEWORK:START -->
 … framework CSS and JS …
-<!-- SLIDESIQ:FRAMEWORK:END -->
+<!-- GLOWWEE:FRAMEWORK:END -->
 ```
 
 These markers serve two purposes:
@@ -205,7 +205,7 @@ Called in `routes/presentations.js` after every content update and in `server.js
 
 Called in `routes/ai.js` before building the AI messages for slide editing:
 
-1. Finds the `<!-- SLIDESIQ:FRAMEWORK:START -->` … `<!-- SLIDESIQ:FRAMEWORK:END -->` block using a regex.
+1. Finds the `<!-- GLOWWEE:FRAMEWORK:START -->` … `<!-- GLOWWEE:FRAMEWORK:END -->` block using a regex.
 2. Removes it entirely.
 3. Returns the stripped HTML.
 

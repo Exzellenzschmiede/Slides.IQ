@@ -61,7 +61,7 @@ Single-page app in `public/`. All JS is ES modules imported via `<script type="m
 5. On completion: `injectFramework()`, slide count update, version snapshot saved to inline JSON array, conversation appended, presentation persisted.
 
 **HTML presentation format:**
-Every stored presentation is a self-contained HTML file. The `PRESENTATION_FRAMEWORK` block (marked with `<!-- SLIDESIQ:FRAMEWORK:START/END -->`) contains all navigation CSS and JS and is always injected before `</body>`. The AI generates only the slides — `<div id="nexus-presentation">` containing `<div class="slide">` children. Slides are scaled via `ResizeObserver` using `transform: scale()` on a 1280×720 canvas.
+Every stored presentation is a self-contained HTML file. The `PRESENTATION_FRAMEWORK` block (marked with `<!-- GLOWWEE:FRAMEWORK:START/END -->`) contains all navigation CSS and JS and is always injected before `</body>`. The AI generates only the slides — `<div id="nexus-presentation">` containing `<div class="slide">` children. Slides are scaled via `ResizeObserver` using `transform: scale()` on a 1280×720 canvas.
 
 **Template system:**
 Templates provide a `system_prompt` (style instructions) and a `theme` JSON `{primaryColor, accentColor, bgColor, style, font}`. The system prompt is prepended in `buildSystemPrompt()`. Default templates (ids prefixed `tpl-`) cannot be deleted from the UI.

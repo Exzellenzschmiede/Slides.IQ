@@ -4,10 +4,12 @@
  * Parse individual slide elements from presentation HTML.
  * Returns [{start, end, html}] — absolute positions in the original string.
  * Handles nested divs via depth counting.
- * Only searches before the SLIDESIQ framework marker.
+ * Only searches before the glowwee framework marker.
  */
 function parseSlidesFromHtml(html) {
-  const frameworkIdx = html.indexOf('<!-- SLIDESIQ:FRAMEWORK:START -->');
+  // Current GLOWWEE marker, with backwards-compat for the legacy SLIDESIQ marker.
+  const newIdx = html.indexOf('<!-- GLOWWEE:FRAMEWORK:START -->');
+  const frameworkIdx = newIdx !== -1 ? newIdx : html.indexOf('<!-- SLIDESIQ:FRAMEWORK:START -->');
   const body = frameworkIdx > 0 ? html.slice(0, frameworkIdx) : html;
 
   const slides = [];

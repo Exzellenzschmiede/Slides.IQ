@@ -12,9 +12,9 @@
 
 ---
 
-## What is Slides.IQ?
+## What is glowwee?
 
-Slides.IQ turns a text prompt into a fully styled, self-contained HTML presentation in seconds. It streams slide content directly from your chosen AI provider into a live preview, supports multi-user access with roles and per-presentation permissions, and lets audiences follow along in real time via WebSocket. Presentations are stored as portable HTML files and can be exported to PDF or shared via a public link.
+glowwee turns a text prompt into a fully styled, self-contained HTML presentation in seconds. It streams slide content directly from your chosen AI provider into a live preview, supports multi-user access with roles and per-presentation permissions, and lets audiences follow along in real time via WebSocket. Presentations are stored as portable HTML files and can be exported to PDF or shared via a public link.
 
 ---
 
@@ -122,4 +122,4 @@ Additional references:
 
 ## License
 
-Slides.IQ is open source and released under the **MIT License**. You are free to use, modify, and distribute it — including for commercial purposes. Contributions are welcome.
+glowwee is open source and released under the **MIT License**. You are free to use, modify, and distribute it — including for commercial purposes. Contributions are welcome.

@@ -1,4 +1,4 @@
-// ─── Slides.IQ — Marketing landing logic ──────────────────────────────────
+// ─── glowwee — Marketing landing logic ──────────────────────────────────
 
 import { t, setLanguage, getCurrentLocale } from './i18n.js';
 
@@ -19,7 +19,7 @@ function applyTranslations() {
 
   document.documentElement.lang = getCurrentLocale();
   const title = t('landing.heroTitleHtml').replace(/<[^>]+>/g, '');
-  document.title = `Slides.IQ — ${title}`;
+  document.title = `glowwee — ${title}`;
 
   renderFeatures();
   renderPricing();
