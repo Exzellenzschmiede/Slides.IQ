@@ -14,7 +14,7 @@ const PROVIDERS = [
   {
     id: 'anthropic', label: 'Anthropic Claude', logo: '◈',
     models: [
-      { value: 'claude-opus-4-7',           label: 'Claude Opus 4.7 (stärkste)' },
+      { value: 'claude-opus-4-8',           label: 'Claude Opus 4.8 (stärkste, 1M Kontext)' },
       { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 (empfohlen)' },
       { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (schnell)' },
     ],
@@ -35,9 +35,9 @@ const PROVIDERS = [
   {
     id: 'mistral', label: 'Mistral Le Chat', logo: '🌊',
     models: [
-      { value: 'mistral-large-3',         label: 'Mistral Large 3 (stärkste)' },
-      { value: 'mistral-medium-3-5',      label: 'Mistral Medium 3.5' },
-      { value: 'mistral-small-2603',      label: 'Mistral Small 4 (schnell)' },
+      { value: 'mistral-large-latest',    label: 'Mistral Large 3 (stärkste)' },
+      { value: 'mistral-medium-latest',   label: 'Mistral Medium 3.5 (empfohlen)' },
+      { value: 'mistral-small-latest',    label: 'Mistral Small 4 (schnell)' },
       { value: 'magistral-medium-latest', label: 'Magistral Medium (Reasoning)' },
     ],
     keyPlaceholder: 'Dein Mistral API-Key',
@@ -46,9 +46,9 @@ const PROVIDERS = [
   {
     id: 'gemini', label: 'Google Gemini', logo: '✦',
     models: [
-      { value: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro (empfohlen)' },
-      { value: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash (schnell)' },
-      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (günstig)' },
+      { value: 'gemini-3.1-pro-preview',  label: 'Gemini 3.1 Pro (stärkste, Reasoning)' },
+      { value: 'gemini-3.5-flash',        label: 'Gemini 3.5 Flash (empfohlen)' },
+      { value: 'gemini-3.1-flash-lite',   label: 'Gemini 3.1 Flash-Lite (günstig)' },
     ],
     keyPlaceholder: 'AIza...',
     keyHint: 'aistudio.google.com',
