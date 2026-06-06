@@ -122,6 +122,34 @@ export const api = {
     },
   },
 
+  // ─── Generic creations (story/voice/music) — /api/creations ─────────────
+  creations: {
+    status: () => apiFetch('/creations/status'),
+    list: (type) => apiFetch(`/creations${type ? '?type=' + type : ''}`),
+    get: (id) => apiFetch(`/creations/${id}`),
+    create: (type, data = {}) => apiFetch('/creations', { method: 'POST', body: { type, ...data } }),
+    update: (id, data) => apiFetch(`/creations/${id}`, { method: 'PUT', body: data }),
+    delete: (id) => apiFetch(`/creations/${id}`, { method: 'DELETE' }),
+    share: (id) => apiFetch(`/creations/${id}/share`, { method: 'POST' }),
+    unshare: (id) => apiFetch(`/creations/${id}/share`, { method: 'DELETE' }),
+    deleteAsset: (id, assetId) => apiFetch(`/creations/${id}/assets/${assetId}`, { method: 'DELETE' }),
+    // Synchronous generation wrapped as a single-yield generator (drives genManager).
+    generate: async function* (id, body = {}, signal) {
+      const res = await fetch(`${API_BASE}/creations/${id}/generate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body), signal,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const e = new Error(err.error || `HTTP ${res.status}`);
+        e.status = res.status; e.code = err.code; e.body = err;
+        throw e;
+      }
+      const data = await res.json();
+      yield { type: 'done', ...data };
+    },
+  },
+
   templates: {
     list: () => apiFetch('/templates'),
     get: (id) => apiFetch(`/templates/${id}`),

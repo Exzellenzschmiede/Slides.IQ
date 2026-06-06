@@ -12,9 +12,20 @@ const QRCode = require('qrcode');
 const db = require('../database');
 const { getBaseUrl } = require('../services/appSettings');
 const ent = require('../services/entitlements');
-const { requireCanGenerateImage, requireFeature } = require('../middleware/entitlements');
 const imageGenerator = require('../services/imageGenerator');
+const audioGenerator = require('../services/audioGenerator');
+const aiProvider = require('../services/aiProvider');
 const assetStore = require('../services/assetStore');
+
+// Supported creation types and the feature flag each requires.
+const TYPE_FEATURE = { image: 'imageStudio', story: 'storyStudio', voice: 'audioStudio', music: 'audioStudio' };
+
+const DEFAULT_TITLES = {
+  image: 'Neues Bildprojekt', story: 'Neue Story', voice: 'Neues Voiceover', music: 'Neuer Sound',
+};
+
+// Upgrade suggestion (mirror middleware/entitlements upgradeInfo).
+const NEXT_TIER = { free: 'pro', pro: 'business', business: 'business' };
 
 const router = express.Router();
 
@@ -41,8 +52,47 @@ function getImageProviderSettings() {
   return { provider, model, apiKey };
 }
 
+function getAudioProviderSettings() {
+  const prefs = getGlobalPrefs();
+  const provider = prefs.audioProvider || 'elevenlabs';
+  const cfg = (prefs.audioProviders || {})[provider] || {};
+  return { provider, apiKey: cfg.apiKey || '', voiceId: cfg.voiceId, ttsModel: cfg.ttsModel, musicModel: cfg.musicModel };
+}
+
+// Text generation provider (Story studio) — shared with the presentation AI.
+function getTextProviderSettings() {
+  const prefs = getGlobalPrefs();
+  const provider = prefs.aiProvider || 'anthropic';
+  const cfg = (prefs.aiProviders || {})[provider] || {};
+  const model = cfg.model || prefs.mainModel || aiProvider.DEFAULT_MODELS[provider];
+  return { provider, model, apiKey: cfg.apiKey || '' };
+}
+
 const NO_KEY_MSG = (provider) =>
   `Kein API-Key für ${provider} konfiguriert. Bitte hinterlege ihn im Admin-Bereich.`;
+
+// Inline entitlement gates (one /generate route serves all types).
+function denyFeature(res, userId, type) {
+  const flag = TYPE_FEATURE[type];
+  if (ent.hasFeature(userId, flag)) return false;
+  const plan = ent.getPlanForUser(userId);
+  res.status(403).json({
+    error: 'Diese Funktion ist in deinem Tarif nicht enthalten.',
+    code: 'feature_locked', feature: flag, plan: plan.id,
+    upgrade: { to: NEXT_TIER[plan.id] || 'pro' },
+  });
+  return true;
+}
+
+function denyQuota(res, r) {
+  if (r.ok) return false;
+  res.status(402).json({
+    error: `Monatliches Limit erreicht (${r.used}/${r.limit}).`,
+    code: r.code, limit: r.limit, used: r.used, plan: r.plan,
+    upgrade: { to: NEXT_TIER[r.plan] || 'pro' },
+  });
+  return true;
+}
 
 // ─── Access helpers (v1: owner-only; public access via share_token) ─────────
 
@@ -73,8 +123,10 @@ function serializeAsset(a, creationId) {
   return {
     id: a.id,
     url: assetUrl(creationId, a.id),
+    kind: a.kind,
     width: a.width,
     height: a.height,
+    duration_ms: a.duration_ms,
     mime_type: a.mime_type,
     prompt: a.prompt,
     seed: a.seed,
@@ -138,12 +190,12 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const { type = 'image', title } = req.body || {};
-  if (!['image'].includes(type)) return res.status(400).json({ error: 'Nicht unterstützter Typ' });
+  if (!TYPE_FEATURE[type]) return res.status(400).json({ error: 'Nicht unterstützter Typ' });
   const id = uuid();
   db.prepare(`
     INSERT INTO creations (id, type, title, user_id)
     VALUES (?, ?, ?, ?)
-  `).run(id, type, (title && title.trim()) || 'Neues Bildprojekt', req.session.userId);
+  `).run(id, type, (title && title.trim()) || DEFAULT_TITLES[type], req.session.userId);
   const row = db.prepare('SELECT * FROM creations WHERE id = ?').get(id);
   res.status(201).json(serializeCreation(row, { withAssets: true }));
 });
@@ -156,81 +208,132 @@ router.get('/:id', (req, res) => {
   res.json(serializeCreation(row, { withAssets: true }));
 });
 
-// ─── Generate images (synchronous; the expensive call) ──────────────────────
+// ─── Generate (synchronous; dispatches by creation type) ────────────────────
 
-router.post('/:id/generate',
-  imageLimiter,
-  requireFeature('imageStudio'),
-  requireCanGenerateImage,
-  async (req, res) => {
-    if (!assertOwner(req, res)) return;
-    const row = db.prepare('SELECT * FROM creations WHERE id = ?').get(req.params.id);
+router.post('/:id/generate', imageLimiter, async (req, res) => {
+  if (!assertOwner(req, res)) return;
+  const row = db.prepare('SELECT * FROM creations WHERE id = ?').get(req.params.id);
+  const userId = req.session.userId;
 
-    const { prompt, style, aspect = '1:1', count } = req.body || {};
-    if (!prompt || !prompt.trim()) return res.status(400).json({ error: 'Prompt erforderlich' });
+  if (denyFeature(res, userId, row.type)) return;
 
-    const n = Math.max(1, Math.min(parseInt(count, 10) || 1, 4));
-    const { provider, model, apiKey } = getImageProviderSettings();
-    if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
-
-    const size = imageGenerator.sizeForAspect(aspect);
-    // Style is folded into the prompt so it survives across providers.
-    const effectivePrompt = style ? `${prompt.trim()}\n\nStil: ${style}.` : prompt.trim();
-
-    try {
-      const result = await imageGenerator.generateImage({
-        provider, apiKey, model, prompt: effectivePrompt, size, n,
-      });
-
-      // Persist assets (files + rows), appended after any existing assets.
-      const existing = db.prepare('SELECT COUNT(*) AS c FROM creation_assets WHERE creation_id = ?').get(row.id).c;
-      const insertAsset = db.prepare(`
-        INSERT INTO creation_assets (id, creation_id, kind, file_path, mime_type, width, height, bytes, prompt, seed, position)
-        VALUES (?, ?, 'image', ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      const savedAssets = [];
-      result.assets.forEach((a, i) => {
-        const { filePath, bytes } = assetStore.saveBuffer(a.buffer, a.mimeType);
-        const assetId = uuid();
-        insertAsset.run(assetId, row.id, filePath, a.mimeType, a.width, a.height, bytes, effectivePrompt, a.seed, existing + i);
-        savedAssets.push({ id: assetId, url: assetUrl(row.id, assetId), width: a.width, height: a.height });
-      });
-
-      // Append to conversation + versions (mirror presentations).
-      const conversation = JSON.parse(row.conversation || '[]');
-      conversation.push({ role: 'user', content: prompt.trim() });
-      conversation.push({ role: 'assistant', content: `${savedAssets.length} Bild(er) generiert`, assetIds: savedAssets.map(a => a.id) });
-
-      const versions = JSON.parse(row.versions || '[]');
-      versions.unshift({
-        id: uuid(),
-        timestamp: new Date().toISOString(),
-        prompt: prompt.trim(),
-        assetIds: savedAssets.map(a => a.id),
-        label: `Batch ${versions.length + 1}`,
-      });
-
-      const newCover = row.cover_asset_id || savedAssets[0]?.id || null;
-      db.prepare(`
-        UPDATE creations
-        SET prompt = ?, provider = ?, model = ?, parameters = ?, conversation = ?, versions = ?,
-            cover_asset_id = ?, updated_at = datetime('now')
-        WHERE id = ?
-      `).run(
-        prompt.trim(), result.provider, result.model,
-        JSON.stringify({ style: style || null, aspect, count: n, size }),
-        JSON.stringify(conversation.slice(-40)),
-        JSON.stringify(versions.slice(0, 20)),
-        newCover, row.id
-      );
-
-      ent.incrementUsage(req.session.userId, 'image_generations'); // count only on success
-      res.json({ assets: savedAssets });
-    } catch (err) {
-      res.status(400).json({ error: err.message });
-    }
+  try {
+    if (row.type === 'image') return await handleImage(req, res, row, userId);
+    if (row.type === 'story') return await handleStory(req, res, row, userId);
+    if (row.type === 'voice' || row.type === 'music') return await handleAudio(req, res, row, userId);
+    return res.status(400).json({ error: 'Nicht unterstützter Typ' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
-);
+});
+
+// Append a generation to conversation + versions and persist core fields.
+function persistGeneration(row, { prompt, assistantContent, assetIds = [], provider, model, parameters, coverId }) {
+  const conversation = JSON.parse(row.conversation || '[]');
+  conversation.push({ role: 'user', content: prompt });
+  conversation.push({ role: 'assistant', content: assistantContent, assetIds });
+  const versions = JSON.parse(row.versions || '[]');
+  versions.unshift({ id: uuid(), timestamp: new Date().toISOString(), prompt, assetIds, content: assistantContent, label: `v${versions.length + 1}` });
+  db.prepare(`
+    UPDATE creations SET prompt = ?, provider = ?, model = ?, parameters = ?, conversation = ?, versions = ?,
+      cover_asset_id = COALESCE(cover_asset_id, ?), updated_at = datetime('now') WHERE id = ?
+  `).run(prompt, provider, model, JSON.stringify(parameters || {}),
+    JSON.stringify(conversation.slice(-40)), JSON.stringify(versions.slice(0, 20)), coverId || null, row.id);
+}
+
+async function handleImage(req, res, row, userId) {
+  if (denyQuota(res, ent.canGenerateImage(userId))) return;
+  const { prompt, style, aspect = '1:1', count } = req.body || {};
+  if (!prompt || !prompt.trim()) return res.status(400).json({ error: 'Prompt erforderlich' });
+  const n = Math.max(1, Math.min(parseInt(count, 10) || 1, 4));
+  const { provider, model, apiKey } = getImageProviderSettings();
+  if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
+
+  const size = imageGenerator.sizeForAspect(aspect);
+  const effectivePrompt = style ? `${prompt.trim()}\n\nStil: ${style}.` : prompt.trim();
+  const result = await imageGenerator.generateImage({ provider, apiKey, model, prompt: effectivePrompt, size, n });
+
+  const existing = db.prepare('SELECT COUNT(*) AS c FROM creation_assets WHERE creation_id = ?').get(row.id).c;
+  const insertAsset = db.prepare(`
+    INSERT INTO creation_assets (id, creation_id, kind, file_path, mime_type, width, height, bytes, prompt, seed, position)
+    VALUES (?, ?, 'image', ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const savedAssets = [];
+  result.assets.forEach((a, i) => {
+    const { filePath, bytes } = assetStore.saveBuffer(a.buffer, a.mimeType);
+    const assetId = uuid();
+    insertAsset.run(assetId, row.id, filePath, a.mimeType, a.width, a.height, bytes, effectivePrompt, a.seed, existing + i);
+    savedAssets.push({ id: assetId, url: assetUrl(row.id, assetId), width: a.width, height: a.height });
+  });
+  persistGeneration(row, {
+    prompt: prompt.trim(), assistantContent: `${savedAssets.length} Bild(er) generiert`,
+    assetIds: savedAssets.map(a => a.id), provider: result.provider, model: result.model,
+    parameters: { style: style || null, aspect, count: n, size }, coverId: savedAssets[0]?.id,
+  });
+  ent.incrementUsage(userId, 'image_generations');
+  res.json({ assets: savedAssets });
+}
+
+const STORY_SYSTEM = `Du bist ein meisterhafter Autor und Storyteller. Schreibe fesselnde, gut strukturierte Texte in der gewünschten Form (Geschichte, Skript, Blogpost, Werbetext, Gedicht …). Achte auf klare Struktur, lebendige Sprache und den passenden Ton. Gib NUR den Text zurück (Markdown erlaubt), keine Vorrede.`;
+
+async function handleStory(req, res, row, userId) {
+  if (denyQuota(res, ent.canGenerate(userId))) return;
+  const { prompt, format, tone, length } = req.body || {};
+  if (!prompt || !prompt.trim()) return res.status(400).json({ error: 'Prompt erforderlich' });
+  const { provider, model, apiKey } = getTextProviderSettings();
+  if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
+
+  const directives = [
+    format ? `Form: ${format}.` : '',
+    tone ? `Ton: ${tone}.` : '',
+    length ? `Länge: ${length}.` : '',
+  ].filter(Boolean).join(' ');
+  const prior = JSON.parse(row.conversation || '[]').slice(-8);
+  const messages = [...prior.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: `${directives}\n\n${prompt.trim()}`.trim() }];
+
+  const text = await aiProvider.generateText({ provider, apiKey, model, messages, systemPrompt: STORY_SYSTEM });
+
+  persistGeneration(row, {
+    prompt: prompt.trim(), assistantContent: text, provider, model,
+    parameters: { format: format || null, tone: tone || null, length: length || null, content: text },
+  });
+  ent.incrementUsage(userId, 'ai_generations');
+  res.json({ content: text });
+}
+
+async function handleAudio(req, res, row, userId) {
+  if (denyQuota(res, ent.canGenerateAudio(userId))) return;
+  const { prompt, mode, durationSeconds, voiceId } = req.body || {};
+  const text = (prompt || '').trim();
+  if (!text) return res.status(400).json({ error: 'Text/Prompt erforderlich' });
+
+  // voice → TTS; music type carries mode 'music' (default) or 'sound'.
+  const genMode = row.type === 'voice' ? 'voice' : (mode === 'sound' ? 'sound' : 'music');
+  const { provider, apiKey, voiceId: defVoice, ttsModel, musicModel } = getAudioProviderSettings();
+  if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
+
+  const result = await audioGenerator.generateAudio({
+    mode: genMode, provider, apiKey, text,
+    voiceId: voiceId || defVoice, ttsModel, musicModel,
+    durationSeconds: durationSeconds ? parseFloat(durationSeconds) : undefined,
+  });
+
+  const existing = db.prepare('SELECT COUNT(*) AS c FROM creation_assets WHERE creation_id = ?').get(row.id).c;
+  const { filePath, bytes } = assetStore.saveBuffer(result.buffer, result.mimeType);
+  const assetId = uuid();
+  db.prepare(`
+    INSERT INTO creation_assets (id, creation_id, kind, file_path, mime_type, duration_ms, bytes, prompt, position)
+    VALUES (?, ?, 'audio', ?, ?, ?, ?, ?, ?)
+  `).run(assetId, row.id, filePath, result.mimeType, result.durationMs, bytes, text, existing);
+  const saved = [{ id: assetId, url: assetUrl(row.id, assetId), duration_ms: result.durationMs }];
+
+  persistGeneration(row, {
+    prompt: text, assistantContent: `Audio generiert (${genMode})`, assetIds: [assetId],
+    provider, model: genMode, parameters: { mode: genMode, durationSeconds: durationSeconds || null, voiceId: voiceId || defVoice }, coverId: assetId,
+  });
+  ent.incrementUsage(userId, 'audio_generations');
+  res.json({ assets: saved });
+}
 
 // ─── Update metadata ────────────────────────────────────────────────────────
 

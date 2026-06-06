@@ -155,19 +155,23 @@ app.get('/api/admin/ai-settings', requireAdmin, (req, res) => {
     aiProvider: prefs.aiProvider || 'anthropic',
     aiProviders: prefs.aiProviders || {},
     imageProvider: prefs.imageProvider || 'openai',
-    imageProviders: prefs.imageProviders || {}
+    imageProviders: prefs.imageProviders || {},
+    audioProvider: prefs.audioProvider || 'elevenlabs',
+    audioProviders: prefs.audioProviders || {}
   });
 });
 
 app.put('/api/admin/ai-settings', requireAdmin, (req, res) => {
   const db = require('./database');
-  const { aiProvider, aiProviders, imageProvider, imageProviders } = req.body;
+  const { aiProvider, aiProviders, imageProvider, imageProviders, audioProvider, audioProviders } = req.body;
   const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = row ? JSON.parse(row.value) : {};
   prefs.aiProvider = aiProvider || prefs.aiProvider || 'anthropic';
   if (aiProviders) prefs.aiProviders = aiProviders;
   if (imageProvider) prefs.imageProvider = imageProvider;
   if (imageProviders) prefs.imageProviders = imageProviders;
+  if (audioProvider) prefs.audioProvider = audioProvider;
+  if (audioProviders) prefs.audioProviders = audioProviders;
   db.prepare("INSERT OR REPLACE INTO settings (key, value, user_id) VALUES ('preferences', ?, '')").run(JSON.stringify(prefs));
   res.json({ ok: true });
 });
