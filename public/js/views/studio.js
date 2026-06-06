@@ -227,6 +227,9 @@ function buildStudioHTML(p) {
       </div>
     </div>
 
+    <!-- Draggable divider -->
+    <div class="studio-divider" id="studio-divider" title="${t('studio.resizeHint')}"></div>
+
     <!-- Right: Preview + Navigator -->
     <div class="studio-preview">
       <div class="preview-frame-container" id="preview-container">
@@ -260,6 +263,7 @@ function initStudio() {
   loadPreview();
   bindEvents();
   bindGenerationEvents();
+  initStudioResizer();
   if (currentPresentation.html_content) {
     buildSlideNavigator();
   }
@@ -274,6 +278,47 @@ function initStudio() {
     _watchingJobIds = active.map(j => j.id);
     _bindNavAwayRestore();
   }
+}
+
+// Draggable split between chat (left) and preview (right).
+// Ratio = chat width fraction in [0.25, 0.8], persisted in localStorage.
+function initStudioResizer() {
+  const layout = document.querySelector('.studio-layout');
+  const divider = document.getElementById('studio-divider');
+  if (!layout || !divider) return;
+
+  const MIN = 0.25, MAX = 0.8;
+  const applyRatio = (r) => {
+    const ratio = Math.min(MAX, Math.max(MIN, r));
+    layout.style.setProperty('--studio-chat-fr', `${ratio}fr`);
+    layout.style.setProperty('--studio-preview-fr', `${1 - ratio}fr`);
+    return ratio;
+  };
+
+  const stored = parseFloat(localStorage.getItem('studioSplitRatio'));
+  applyRatio(Number.isFinite(stored) ? stored : 0.667);
+
+  let current = Number.isFinite(stored) ? stored : 0.667;
+
+  const onMove = (e) => {
+    const rect = layout.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    current = applyRatio((e.clientX - rect.left) / rect.width);
+  };
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.body.classList.remove('studio-resizing');
+    divider.classList.remove('dragging');
+    localStorage.setItem('studioSplitRatio', String(current));
+  };
+  divider.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    document.body.classList.add('studio-resizing');
+    divider.classList.add('dragging');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
 }
 
 async function loadModelLabel() {

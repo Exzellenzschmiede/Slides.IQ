@@ -66,6 +66,7 @@ const LOCALES = {
     },
     studio: {
       backTitle: 'Back to My Slides',
+      resizeHint: 'Drag to resize',
       metaSlides: '{{count}} Slides · last updated {{date}}',
       metaActive: '{{count}} Slides · Slide {{index}} active',
       metaJustEdited: '{{count}} Slides · just edited',
@@ -499,6 +500,7 @@ const LOCALES = {
     },
     studio: {
       backTitle: 'Zurück zu Meine Slides',
+      resizeHint: 'Ziehen zum Anpassen',
       metaSlides: '{{count}} Slides · zuletzt {{date}}',
       metaActive: '{{count}} Slides · Slide {{index}} aktiv',
       metaJustEdited: '{{count}} Slides · gerade bearbeitet',
@@ -932,6 +934,7 @@ const LOCALES = {
     },
     studio: {
       backTitle: 'Torna a Le mie slide',
+      resizeHint: 'Trascina per ridimensionare',
       metaSlides: '{{count}} slide · aggiornato {{date}}',
       metaActive: '{{count}} slide · Slide {{index}} attiva',
       metaJustEdited: '{{count}} slide · appena modificato',
@@ -1350,6 +1353,7 @@ const LOCALES = {
     },
     studio: {
       backTitle: 'Terug naar Mijn slides',
+      resizeHint: 'Sleep om formaat aan te passen',
       metaSlides: '{{count}} slides · laatst {{date}}',
       metaActive: '{{count}} slides · Slide {{index}} actief',
       metaJustEdited: '{{count}} slides · zojuist bewerkt',
@@ -1768,6 +1772,7 @@ const LOCALES = {
     },
     studio: {
       backTitle: 'Wróć do Moje slajdy',
+      resizeHint: 'Przeciągnij, aby zmienić rozmiar',
       metaSlides: '{{count}} slajdów · ostatnio {{date}}',
       metaActive: '{{count}} slajdów · Slajd {{index}} aktywny',
       metaJustEdited: '{{count}} slajdów · właśnie edytowano',

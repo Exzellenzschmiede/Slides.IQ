@@ -680,11 +680,41 @@ html, body {
 
 .studio-layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 20px;
+  grid-template-columns:
+    minmax(260px, var(--studio-chat-fr, 2fr))
+    8px
+    minmax(260px, var(--studio-preview-fr, 1fr));
+  gap: 12px;
   flex: 1;
   min-height: 0;
 }
+
+/* ── Studio Resize Divider ── */
+.studio-divider {
+  cursor: col-resize;
+  background: var(--border);
+  border-radius: 4px;
+  position: relative;
+  transition: background var(--transition);
+}
+.studio-divider:hover,
+.studio-divider.dragging { background: var(--primary-light); }
+/* Greif-Indikator (vertikale Linie in der Mitte) */
+.studio-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px; height: 32px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+}
+/* Während des Ziehens: Auswahl/Cursor global ruhigstellen */
+body.studio-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.studio-resizing iframe { pointer-events: none; }
 
 /* ── Studio Back Button ── */
 .studio-back-btn {
@@ -1994,6 +2024,7 @@ html, body {
   #view-container:not(.studio-mode) { padding: 16px; }
   .studio-wrapper { padding: 16px; }
   .studio-layout { grid-template-columns: 1fr; }
+  .studio-divider { display: none; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-section { grid-column: span 1; }
   #sidebar { width: 64px; }
