@@ -88,6 +88,40 @@ export const api = {
     duplicateSlide: (id, slideIndex) => apiFetch(`/presentations/${id}/slides/${slideIndex}/duplicate`, { method: 'POST' })
   },
 
+  // ─── Images (Creative Studio) — backed by /api/creations?type=image ──────
+  images: {
+    status: () => apiFetch('/creations/status'),
+    list: () => apiFetch('/creations?type=image'),
+    get: (id) => apiFetch(`/creations/${id}`),
+    create: (data = {}) => apiFetch('/creations', { method: 'POST', body: { type: 'image', ...data } }),
+    update: (id, data) => apiFetch(`/creations/${id}`, { method: 'PUT', body: data }),
+    delete: (id) => apiFetch(`/creations/${id}`, { method: 'DELETE' }),
+    share: (id) => apiFetch(`/creations/${id}/share`, { method: 'POST' }),
+    unshare: (id) => apiFetch(`/creations/${id}/share`, { method: 'DELETE' }),
+    setCover: (id, assetId) => apiFetch(`/creations/${id}/cover`, { method: 'PUT', body: { assetId } }),
+    favorite: (id, assetId, on) => apiFetch(`/creations/${id}/assets/${assetId}/favorite`, { method: 'PUT', body: { on } }),
+    deleteAsset: (id, assetId) => apiFetch(`/creations/${id}/assets/${assetId}`, { method: 'DELETE' }),
+
+    // Synchronous generation wrapped as a single-yield async generator so the
+    // generationManager (built for SSE) drives it unchanged. Emits one {type:'done'}.
+    generate: async function* (id, prompt, opts = {}, signal) {
+      const res = await fetch(`${API_BASE}/creations/${id}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, ...opts }),
+        signal,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const e = new Error(err.error || `HTTP ${res.status}`);
+        e.status = res.status; e.code = err.code; e.body = err;
+        throw e;
+      }
+      const data = await res.json();
+      yield { type: 'done', assets: data.assets || [] };
+    },
+  },
+
   templates: {
     list: () => apiFetch('/templates'),
     get: (id) => apiFetch(`/templates/${id}`),

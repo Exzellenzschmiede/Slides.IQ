@@ -23,22 +23,24 @@ class GenerationManager {
   }
 
   // Start a generation job.
-  // config: { presentationId, title, label, type, meta, apiCall }
+  // config: { presentationId, title, label, type, module, openHref, doneLabel, meta, apiCall }
+  // module: 'presentation' (default) | 'image' — controls the done-card link/label.
   // apiCall: (signal) => AsyncIterator<SSE event>
   // Returns jobId
-  start({ presentationId, title, label, type = 'generate', meta = {}, apiCall }) {
+  start({ presentationId, title, label, type = 'generate', module = 'presentation', openHref = null, doneLabel = null, meta = {}, apiCall }) {
     this._ensureContainer();
 
     const id = crypto.randomUUID();
     const controller = new AbortController();
 
     const job = {
-      id, presentationId, title, label, type, meta,
+      id, presentationId, title, label, type, module, openHref, doneLabel, meta,
       status: 'running',
       chars: 0,
       liveHtml: '',
       slideCount: null,
       newIndex: null,
+      assets: null,
       error: null,
       controller,
       cardEl: null,
@@ -91,6 +93,7 @@ class GenerationManager {
         } else if (event.type === 'done') {
           if (event.slide_count != null) job.slideCount = event.slide_count;
           if (event.new_index != null) job.newIndex = event.new_index;
+          if (event.assets != null) job.assets = event.assets;
         } else if (event.type === 'error') {
           throw new Error(event.message);
         }
@@ -116,9 +119,11 @@ class GenerationManager {
       presentationId: job.presentationId,
       title: job.title,
       type: job.type,
+      module: job.module,
       meta: job.meta,
       slideCount: job.slideCount,
       newIndex: job.newIndex,
+      assets: job.assets,
       error: job.error,
       status: job.status,
       limitInfo: job.limitInfo || null,
@@ -156,7 +161,13 @@ class GenerationManager {
           ${chars}
         </div>`;
     } else if (job.status === 'done') {
-      const info = job.slideCount != null ? `${job.slideCount} Slides fertig` : 'Fertig';
+      let info;
+      if (job.doneLabel) info = job.doneLabel;
+      else if (job.module === 'image') info = `${(job.assets?.length ?? 0)} Bild(er) fertig`;
+      else info = job.slideCount != null ? `${job.slideCount} Slides fertig` : 'Fertig';
+      const href = job.openHref || (job.module === 'image'
+        ? `#image-studio/${esc(job.presentationId)}`
+        : `#studio/${esc(job.presentationId)}`);
       body = `
         <div class="gen-toast-header gen-toast-header-done">
           <span class="gen-toast-title">✓ ${esc(titleShort)}</span>
@@ -164,7 +175,7 @@ class GenerationManager {
         </div>
         <div class="gen-toast-body">
           <span class="gen-toast-label">${info}</span>
-          <a class="gen-toast-open" href="#studio/${esc(job.presentationId)}">Öffnen →</a>
+          <a class="gen-toast-open" href="${href}">Öffnen →</a>
         </div>`;
     } else if (job.status === 'error') {
       body = `

@@ -14,10 +14,13 @@ export function navigate(view, params = {}) {
 }
 
 export function parseRoute() {
-  const hash = window.location.hash.slice(1) || 'dashboard';
+  const hash = window.location.hash.slice(1) || 'hub';
   const parts = hash.split('/');
   return { view: parts[0], id: parts[1] || null };
 }
+
+// Sub-views map their nav highlight to a top-level library entry.
+const NAV_GROUP = { studio: 'dashboard', 'image-studio': 'gallery' };
 
 export function rerenderCurrentView() {
   if (_renderFn) _renderFn();
@@ -27,15 +30,15 @@ export function initRouter(container) {
   async function render() {
     const { view, id } = parseRoute();
 
-    // Update nav — studio is a sub-view of dashboard ("Meine Slides")
-    const activeNav = view === 'studio' ? 'dashboard' : view;
+    // Update nav — sub-views (studio, image-studio) highlight their library entry.
+    const activeNav = NAV_GROUP[view] || view;
     document.querySelectorAll('.nav-item').forEach(item => {
       item.classList.toggle('active', item.dataset.view === activeNav);
     });
 
     // Render view
     container.classList.remove('studio-mode');
-    const renderFn = routes[view] || routes['dashboard'];
+    const renderFn = routes[view] || routes['hub'];
     if (renderFn) {
       container.innerHTML = '<div class="loading-screen"><div class="loading-orb"></div></div>';
       try {

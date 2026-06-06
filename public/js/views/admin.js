@@ -173,6 +173,41 @@ export async function renderAdmin(container) {
 
 // ─── AI Settings ──────────────────────────────────────────────────────────
 
+// Image generation providers (Creative Studio → Image Studio).
+const IMAGE_PROVIDERS = [
+  { id: 'openai', label: 'OpenAI', model: 'gpt-image-1', keyPlaceholder: 'sk-…' },
+  { id: 'gemini', label: 'Google Gemini', model: 'gemini-2.5-flash-image', keyPlaceholder: 'AIza…' },
+];
+
+function buildImageProviderSection(activeProvider, imageProviders) {
+  const rows = IMAGE_PROVIDERS.map(p => {
+    const cfg = imageProviders[p.id] || {};
+    const apiKey = cfg.apiKey || '';
+    const model = cfg.model || p.model;
+    return `
+      <div style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="radio" name="image-provider" value="${p.id}" ${p.id === activeProvider ? 'checked' : ''} style="accent-color:var(--mod-images)">
+          <span style="font-size:13px;font-weight:600">${p.label}</span>
+          <span style="font-size:11px;color:var(--text-muted)">${escHtml(model)}</span>
+        </label>
+        <div class="password-wrapper">
+          <input type="password" class="form-input" id="image-key-${p.id}" value="${escHtml(apiKey)}" placeholder="${p.keyPlaceholder}" autocomplete="off">
+          <button type="button" class="password-toggle" data-target="image-key-${p.id}" title="Anzeigen/Verstecken">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <input type="hidden" id="image-model-${p.id}" value="${escHtml(model)}">
+      </div>`;
+  }).join('');
+  return `
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="form-label" style="margin-bottom:4px">🎨 Bild-Generierung (Creative Studio)</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">API-Key für die Bild-Erstellung im Image Studio. Aktiven Anbieter auswählen.</p>
+      ${rows}
+    </div>`;
+}
+
 async function loadAiSettings() {
   const card = document.getElementById('ai-settings-card');
   if (!card) return;
@@ -180,8 +215,11 @@ async function loadAiSettings() {
     const data = await api.admin.aiSettings.get();
     const activeProvider = data.aiProvider || 'anthropic';
     const aiProviders = data.aiProviders || {};
+    const imageProvider = data.imageProvider || 'openai';
+    const imageProviders = data.imageProviders || {};
 
-    card.innerHTML = buildProviderSection(activeProvider, aiProviders) + `
+    card.innerHTML = buildProviderSection(activeProvider, aiProviders)
+      + buildImageProviderSection(imageProvider, imageProviders) + `
       <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
         <button class="btn btn-primary btn-sm" id="ai-settings-save">Speichern</button>
         <span id="ai-settings-status" style="font-size:13px;color:var(--text-muted)"></span>
@@ -221,8 +259,17 @@ async function saveAiSettings() {
     };
   }
 
+  const imageProvider = document.querySelector('input[name="image-provider"]:checked')?.value || 'openai';
+  const imageProviders = {};
+  for (const p of IMAGE_PROVIDERS) {
+    imageProviders[p.id] = {
+      apiKey: document.getElementById(`image-key-${p.id}`)?.value || '',
+      model: document.getElementById(`image-model-${p.id}`)?.value || p.model,
+    };
+  }
+
   try {
-    await api.admin.aiSettings.update({ aiProvider, aiProviders });
+    await api.admin.aiSettings.update({ aiProvider, aiProviders, imageProvider, imageProviders });
     if (statusEl) { statusEl.textContent = '✓ Gespeichert'; statusEl.style.color = 'var(--success)'; }
     setTimeout(() => { if (statusEl) { statusEl.textContent = ''; } }, 2500);
   } catch (err) {

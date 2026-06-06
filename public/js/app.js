@@ -2,21 +2,27 @@
 
 import { registerView, initRouter } from './router.js';
 import { initModal } from './components/modal.js';
+import { renderHub } from './views/hub.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderStudio } from './views/studio.js';
+import { renderGallery } from './views/gallery.js';
+import { renderImageStudio } from './views/imageStudio.js';
 import { renderTemplates } from './views/templates.js';
 import { renderSettings } from './views/settings.js';
 import { renderAdmin } from './views/admin.js';
 import { api } from './api.js';
 import { genManager } from './generationManager.js'; // initialises the singleton
 import { initPasswordToggles } from './utils/passwordToggle.js';
-import { setLanguage, getCurrentLocale } from './i18n.js';
-import { toastSuccess, toastError } from './components/toast.js';
+import { setLanguage, getCurrentLocale, t } from './i18n.js';
+import { toastSuccess, toastError, toastInfo } from './components/toast.js';
 
 // ─── Register views ───────────────────────────────────────────────────────
 
+registerView('hub', renderHub);
 registerView('dashboard', renderDashboard);
 registerView('studio', renderStudio);
+registerView('gallery', renderGallery);
+registerView('image-studio', renderImageStudio);
 registerView('templates', renderTemplates);
 registerView('settings', renderSettings);
 registerView('admin', renderAdmin);
@@ -39,6 +45,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
       window.location.hash = '#' + item.dataset.view;
+    });
+  });
+
+  // Coming-soon studios (no data-view) → friendly toast.
+  document.querySelectorAll('.nav-item-soon').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      toastInfo(t('hub.comingSoon'));
     });
   });
 });
