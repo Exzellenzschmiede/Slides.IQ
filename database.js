@@ -112,6 +112,47 @@ db.exec(`
     PRIMARY KEY (user_id, period, metric)
   );
 
+  -- A "creation" is one work item in a non-presentation Studio (image now;
+  -- audio/voice/story later). Generic across modalities: modality-specific data
+  -- lives in parameters (JSON) and the child creation_assets rows.
+  CREATE TABLE IF NOT EXISTS creations (
+    id            TEXT PRIMARY KEY,
+    type          TEXT NOT NULL,                 -- 'image' | 'audio' | 'voice' | 'story'
+    title         TEXT NOT NULL DEFAULT 'Untitled',
+    prompt        TEXT,                          -- latest/primary prompt
+    provider      TEXT,                          -- 'openai' | 'gemini' | ...
+    model         TEXT,                          -- e.g. 'gpt-image-1'
+    cover_asset_id TEXT,                          -- chosen cover asset (creation_assets.id)
+    parameters    TEXT NOT NULL DEFAULT '{}',    -- JSON: {size, n, quality, style, seed, ...}
+    conversation  TEXT NOT NULL DEFAULT '[]',    -- JSON iteration history
+    versions      TEXT NOT NULL DEFAULT '[]',    -- JSON, capped at 20
+    tags          TEXT NOT NULL DEFAULT '[]',    -- JSON
+    share_token   TEXT UNIQUE,
+    view_count    INTEGER NOT NULL DEFAULT 0,
+    user_id       TEXT REFERENCES users(id) ON DELETE CASCADE,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- One row per generated binary asset (PNG now; MP3/WAV later). Files live on
+  -- disk under DATA_DIR/assets; the DB stores only a relative reference + metadata.
+  CREATE TABLE IF NOT EXISTS creation_assets (
+    id           TEXT PRIMARY KEY,
+    creation_id  TEXT NOT NULL REFERENCES creations(id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL DEFAULT 'image',  -- 'image' | 'audio' | ...
+    file_path    TEXT NOT NULL,                  -- relative path under assets dir, e.g. 'ab/uuid.png'
+    mime_type    TEXT NOT NULL,                  -- 'image/png'
+    width        INTEGER,
+    height       INTEGER,
+    duration_ms  INTEGER,                        -- for audio/voice later
+    bytes        INTEGER,
+    prompt       TEXT,                           -- the exact prompt that produced THIS asset
+    seed         TEXT,
+    position     INTEGER NOT NULL DEFAULT 0,     -- order within a batch (n>1)
+    is_favorite  INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_presentations_updated ON presentations(updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_presentations_share ON presentations(share_token);
   CREATE INDEX IF NOT EXISTS idx_presentations_user ON presentations(user_id);
@@ -121,6 +162,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(stripe_customer_id);
   CREATE INDEX IF NOT EXISTS idx_subscriptions_sub ON subscriptions(stripe_subscription_id);
   CREATE INDEX IF NOT EXISTS idx_usage_user_period ON usage_counters(user_id, period);
+  CREATE INDEX IF NOT EXISTS idx_creations_user ON creations(user_id, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_creations_type ON creations(type);
+  CREATE INDEX IF NOT EXISTS idx_creations_share ON creations(share_token);
+  CREATE INDEX IF NOT EXISTS idx_assets_creation ON creation_assets(creation_id, position);
 `);
 
 // Schema migrations — add columns that may be missing in older DB instances
@@ -193,6 +238,13 @@ const defaultSettings = {
       openai:    { apiKey: '', model: 'gpt-5.5' },
       mistral:   { apiKey: '', model: 'mistral-large-latest' },
       gemini:    { apiKey: '', model: 'gemini-3.5-flash' }
+    },
+    // Image generation provider (Creative Studio → Image Studio). Keys are
+    // Admin-managed; resolved defensively at call time (missing → defaults).
+    imageProvider: 'openai',
+    imageProviders: {
+      openai: { apiKey: '', model: 'gpt-image-1' },
+      gemini: { apiKey: '', model: 'gemini-2.5-flash-image' }
     }
   }
 };

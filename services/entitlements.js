@@ -44,9 +44,11 @@ function getPlanForUser(userId) {
 
 function getUsage(userId) {
   const gen = getCounter.get(userId, currentPeriod(), 'ai_generations');
+  const img = getCounter.get(userId, currentPeriod(), 'image_generations');
   const pres = countPresentations.get(userId);
   return {
     aiGenerations: gen ? gen.count : 0,
+    imageGenerations: img ? img.count : 0,
     presentations: pres ? pres.c : 0,
   };
 }
@@ -59,11 +61,14 @@ function getEntitlements(userId) {
   const plan = getPlanForUser(userId);
   const sub = getSubscription(userId);
   const usage = getUsage(userId);
+  const imageLimit = plan.limits.imageGenerationsPerMonth ?? 0;
   const remaining = {
     aiGenerations: isUnlimited(plan.limits.aiGenerationsPerMonth)
       ? -1 : Math.max(0, plan.limits.aiGenerationsPerMonth - usage.aiGenerations),
     presentations: isUnlimited(plan.limits.maxPresentations)
       ? -1 : Math.max(0, plan.limits.maxPresentations - usage.presentations),
+    imageGenerations: isUnlimited(imageLimit)
+      ? -1 : Math.max(0, imageLimit - usage.imageGenerations),
   };
   return {
     plan: { id: plan.id, name: plan.name, limits: plan.limits, features: plan.features },
@@ -96,6 +101,15 @@ function canCreatePresentation(userId) {
   return { ok: false, reason: 'presentation_limit', code: 'presentation_limit_exceeded', limit, used, plan: plan.id };
 }
 
+function canGenerateImage(userId) {
+  const plan = getPlanForUser(userId);
+  const limit = plan.limits.imageGenerationsPerMonth ?? 0;
+  if (isUnlimited(limit)) return { ok: true };
+  const used = getUsage(userId).imageGenerations;
+  if (used < limit) return { ok: true };
+  return { ok: false, reason: 'image_quota', code: 'image_quota_exceeded', limit, used, plan: plan.id };
+}
+
 function hasFeature(userId, flag) {
   return !!getPlanForUser(userId).features[flag];
 }
@@ -110,5 +124,6 @@ module.exports = {
   getEntitlements,
   canGenerate,
   canCreatePresentation,
+  canGenerateImage,
   hasFeature,
 };
