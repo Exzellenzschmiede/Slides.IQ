@@ -245,6 +245,12 @@ const defaultSettings = {
     imageProviders: {
       openai: { apiKey: '', model: 'gpt-image-1' },
       gemini: { apiKey: '', model: 'gemini-2.5-flash-image' }
+    },
+    // Audio provider (Creative Studio → Voice + Music & Sound studios).
+    audioProvider: 'elevenlabs',
+    audioProviders: {
+      elevenlabs: { apiKey: '', voiceId: '21m00Tcm4TlvDq8ikWAM', ttsModel: 'eleven_multilingual_v2', musicModel: 'music_v1' },
+      openai:     { apiKey: '', voiceId: 'alloy', ttsModel: 'tts-1' }
     }
   }
 };
