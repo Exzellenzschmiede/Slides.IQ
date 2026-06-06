@@ -12,9 +12,9 @@ function formatDate(iso) {
 const MODALITIES = [
   { key: 'presentations', icon: '◈', accent: 'var(--mod-presentations)', href: '#dashboard', active: true },
   { key: 'images',        icon: '❖', accent: 'var(--mod-images)',        href: '#gallery',   active: true },
-  { key: 'music',         icon: '♪', accent: 'var(--mod-music)',         soon: true },
-  { key: 'voice',         icon: '◌', accent: 'var(--mod-voice)',         soon: true },
-  { key: 'stories',       icon: '✎', accent: 'var(--mod-stories)',       soon: true },
+  { key: 'stories',       icon: '✎', accent: 'var(--mod-stories)',       href: '#stories',   active: true },
+  { key: 'voice',         icon: '◌', accent: 'var(--mod-voice)',         href: '#voices',    active: true },
+  { key: 'music',         icon: '♪', accent: 'var(--mod-music)',         href: '#sounds',    active: true },
 ];
 
 function tileHTML(m, i) {

@@ -20,7 +20,13 @@ export function parseRoute() {
 }
 
 // Sub-views map their nav highlight to a top-level library entry.
-const NAV_GROUP = { studio: 'dashboard', 'image-studio': 'gallery' };
+const NAV_GROUP = {
+  studio: 'dashboard',
+  'image-studio': 'gallery',
+  'story-studio': 'stories',
+  'voice-studio': 'voices',
+  'music-studio': 'sounds',
+};
 
 export function rerenderCurrentView() {
   if (_renderFn) _renderFn();
