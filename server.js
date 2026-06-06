@@ -116,6 +116,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/presentations', requireAuth, require('./routes/presentations'));
 app.use('/api/templates', requireAuth, require('./routes/templates'));
 app.use('/api/ai', requireAuth, aiLimiter, require('./routes/ai'));
+app.use('/api/creations', requireAuth, require('./routes/creations'));
 app.use('/api/billing', requireAuth, require('./routes/billing').router);
 
 // ─── Settings API (user-scoped) ───────────────────────────────────────────
@@ -152,17 +153,21 @@ app.get('/api/admin/ai-settings', requireAdmin, (req, res) => {
   const prefs = row ? JSON.parse(row.value) : {};
   res.json({
     aiProvider: prefs.aiProvider || 'anthropic',
-    aiProviders: prefs.aiProviders || {}
+    aiProviders: prefs.aiProviders || {},
+    imageProvider: prefs.imageProvider || 'openai',
+    imageProviders: prefs.imageProviders || {}
   });
 });
 
 app.put('/api/admin/ai-settings', requireAdmin, (req, res) => {
   const db = require('./database');
-  const { aiProvider, aiProviders } = req.body;
+  const { aiProvider, aiProviders, imageProvider, imageProviders } = req.body;
   const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = row ? JSON.parse(row.value) : {};
   prefs.aiProvider = aiProvider || prefs.aiProvider || 'anthropic';
   if (aiProviders) prefs.aiProviders = aiProviders;
+  if (imageProvider) prefs.imageProvider = imageProvider;
+  if (imageProviders) prefs.imageProviders = imageProviders;
   db.prepare("INSERT OR REPLACE INTO settings (key, value, user_id) VALUES ('preferences', ?, '')").run(JSON.stringify(prefs));
   res.json({ ok: true });
 });
@@ -236,6 +241,42 @@ app.get('/view/:token', (req, res) => {
   db.prepare('UPDATE presentations SET view_count = view_count + 1 WHERE id = ?').run(row.id);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(row.html_content);
+});
+
+// ─── Public creation (image) share ─────────────────────────────────────────
+// A gallery page for a shared image creation, plus per-asset streaming.
+
+app.get('/view/creation/:token', (req, res) => {
+  const db = require('./database');
+  const row = db.prepare('SELECT * FROM creations WHERE share_token = ?').get(req.params.token);
+  if (!row) {
+    return res.status(404).send('<!DOCTYPE html><html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#05070f;color:#e2e8f0"><h2>Nicht gefunden</h2></body></html>');
+  }
+  const assets = db.prepare('SELECT id FROM creation_assets WHERE creation_id = ? ORDER BY position ASC, created_at ASC').all(row.id);
+  db.prepare('UPDATE creations SET view_count = view_count + 1 WHERE id = ?').run(row.id);
+  const imgs = assets.map(a =>
+    `<img src="/view/creation/${req.params.token}/${a.id}" alt="" loading="lazy">`
+  ).join('');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${row.title.replace(/</g, '&lt;')} — glowwee</title>
+<style>*{box-sizing:border-box;margin:0}body{font-family:Inter,system-ui,sans-serif;background:#05070f;color:#e2e8f0;padding:32px}h1{font-size:22px;margin-bottom:24px;background:linear-gradient(135deg,#9d5cf0,#22d3ee);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}img{width:100%;border-radius:16px;border:1px solid rgba(255,255,255,.08);display:block}
+.footer{margin-top:32px;font-size:12px;color:rgba(226,232,240,.4)}</style></head>
+<body><h1>${row.title.replace(/</g, '&lt;')}</h1><div class="grid">${imgs || '<p>Noch keine Bilder.</p>'}</div><div class="footer">Erstellt mit glowwee Creative Studio</div></body></html>`);
+});
+
+app.get('/view/creation/:token/:assetId', (req, res) => {
+  const db = require('./database');
+  const assetStore = require('./services/assetStore');
+  const row = db.prepare('SELECT id FROM creations WHERE share_token = ?').get(req.params.token);
+  if (!row) return res.status(404).send('Not found');
+  const asset = db.prepare('SELECT * FROM creation_assets WHERE id = ? AND creation_id = ?').get(req.params.assetId, row.id);
+  if (!asset) return res.status(404).send('Not found');
+  let abs;
+  try { abs = assetStore.absolutePath(asset.file_path); } catch { return res.status(400).send('Bad path'); }
+  res.setHeader('Content-Type', asset.mime_type);
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.sendFile(abs);
 });
 
 // ─── Public marketing site ────────────────────────────────────────────────

@@ -35,6 +35,16 @@ function requireCanCreatePresentation(req, res, next) {
   });
 }
 
+function requireCanGenerateImage(req, res, next) {
+  const r = ent.canGenerateImage(req.session.userId);
+  if (r.ok) return next();
+  return res.status(402).json({
+    error: `Monatliches Limit an Bild-Generierungen erreicht (${r.used}/${r.limit}).`,
+    code: r.code, limit: r.limit, used: r.used, plan: r.plan,
+    upgrade: upgradeInfo(r.plan),
+  });
+}
+
 function requireFeature(flag) {
   return (req, res, next) => {
     if (ent.hasFeature(req.session.userId, flag)) return next();
@@ -47,4 +57,4 @@ function requireFeature(flag) {
   };
 }
 
-module.exports = { requireCanGenerate, requireCanCreatePresentation, requireFeature };
+module.exports = { requireCanGenerate, requireCanCreatePresentation, requireCanGenerateImage, requireFeature };
