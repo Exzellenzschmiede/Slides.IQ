@@ -19,6 +19,16 @@ import { initPasswordToggles } from './utils/passwordToggle.js';
 import { setLanguage, getCurrentLocale, t } from './i18n.js';
 import { toastSuccess, toastError, toastInfo } from './components/toast.js';
 
+// Translate all static [data-i18n] elements (sidebar nav etc.) in place.
+// Call after setLanguage() on boot and whenever the language changes.
+export function applyStaticI18n(root = document) {
+  root.querySelectorAll('[data-i18n]').forEach(el => {
+    const val = t(el.dataset.i18n);
+    if (val) el.textContent = val;
+  });
+}
+window.applyStaticI18n = applyStaticI18n;
+
 // ─── Register views ───────────────────────────────────────────────────────
 
 registerView('hub', renderHub);
@@ -312,6 +322,7 @@ async function setCurrentUser(user) {
   } catch {
     setLanguage('en');
   }
+  applyStaticI18n();
 
   // Show admin nav item for admins
   if (user.role === 'admin') {

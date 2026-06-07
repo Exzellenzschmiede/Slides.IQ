@@ -164,6 +164,7 @@ export async function renderSettings(container) {
   document.getElementById('pref-lang')?.addEventListener('change', async () => {
     clearTimeout(saveTimer);
     setLanguage(document.getElementById('pref-lang').value);
+    window.applyStaticI18n?.();
     await saveAll();
     rerenderCurrentView();
   });
