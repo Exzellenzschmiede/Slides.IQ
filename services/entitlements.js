@@ -46,11 +46,13 @@ function getUsage(userId) {
   const gen = getCounter.get(userId, currentPeriod(), 'ai_generations');
   const img = getCounter.get(userId, currentPeriod(), 'image_generations');
   const aud = getCounter.get(userId, currentPeriod(), 'audio_generations');
+  const camp = getCounter.get(userId, currentPeriod(), 'campaign_generations');
   const pres = countPresentations.get(userId);
   return {
     aiGenerations: gen ? gen.count : 0,
     imageGenerations: img ? img.count : 0,
     audioGenerations: aud ? aud.count : 0,
+    campaignGenerations: camp ? camp.count : 0,
     presentations: pres ? pres.c : 0,
   };
 }
@@ -65,6 +67,7 @@ function getEntitlements(userId) {
   const usage = getUsage(userId);
   const imageLimit = plan.limits.imageGenerationsPerMonth ?? 0;
   const audioLimit = plan.limits.audioGenerationsPerMonth ?? 0;
+  const campaignLimit = plan.limits.campaignGenerationsPerMonth ?? 0;
   const remaining = {
     aiGenerations: isUnlimited(plan.limits.aiGenerationsPerMonth)
       ? -1 : Math.max(0, plan.limits.aiGenerationsPerMonth - usage.aiGenerations),
@@ -74,6 +77,8 @@ function getEntitlements(userId) {
       ? -1 : Math.max(0, imageLimit - usage.imageGenerations),
     audioGenerations: isUnlimited(audioLimit)
       ? -1 : Math.max(0, audioLimit - usage.audioGenerations),
+    campaignGenerations: isUnlimited(campaignLimit)
+      ? -1 : Math.max(0, campaignLimit - usage.campaignGenerations),
   };
   return {
     plan: { id: plan.id, name: plan.name, limits: plan.limits, features: plan.features },
@@ -124,6 +129,15 @@ function canGenerateAudio(userId) {
   return { ok: false, reason: 'audio_quota', code: 'audio_quota_exceeded', limit, used, plan: plan.id };
 }
 
+function canGenerateCampaign(userId) {
+  const plan = getPlanForUser(userId);
+  const limit = plan.limits.campaignGenerationsPerMonth ?? 0;
+  if (isUnlimited(limit)) return { ok: true };
+  const used = getUsage(userId).campaignGenerations;
+  if (used < limit) return { ok: true };
+  return { ok: false, reason: 'campaign_quota', code: 'campaign_quota_exceeded', limit, used, plan: plan.id };
+}
+
 function hasFeature(userId, flag) {
   return !!getPlanForUser(userId).features[flag];
 }
@@ -140,5 +154,6 @@ module.exports = {
   canCreatePresentation,
   canGenerateImage,
   canGenerateAudio,
+  canGenerateCampaign,
   hasFeature,
 };

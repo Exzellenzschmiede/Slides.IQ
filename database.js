@@ -193,9 +193,21 @@ const migrations = [
   "ALTER TABLE subscriptions ADD COLUMN stripe_price_id TEXT",
   "ALTER TABLE subscriptions ADD COLUMN cancel_at_period_end INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE subscriptions ADD COLUMN admin_override_plan TEXT",
+  // Campaign-Orchestrator: link child artifacts to a campaign hub (soft ref).
+  "ALTER TABLE creations ADD COLUMN campaign_id TEXT",
+  "ALTER TABLE presentations ADD COLUMN campaign_id TEXT",
 ];
 for (const sql of migrations) {
   try { db.exec(sql); } catch (_) { /* column already exists */ }
+}
+
+// Indexes that depend on migrated columns (run after the ALTERs above).
+const postMigrationIndexes = [
+  "CREATE INDEX IF NOT EXISTS idx_creations_campaign ON creations(campaign_id)",
+  "CREATE INDEX IF NOT EXISTS idx_presentations_campaign ON presentations(campaign_id)",
+];
+for (const sql of postMigrationIndexes) {
+  try { db.exec(sql); } catch (_) { /* column not present yet */ }
 }
 
 // Prune expired auth tokens on startup (keeps the table small; cheap).

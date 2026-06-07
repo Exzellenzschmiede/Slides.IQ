@@ -90,13 +90,21 @@ class GenerationManager {
           window.dispatchEvent(new CustomEvent('genmanager:progress', {
             detail: { jobId: job.id, presentationId: job.presentationId, chars: job.chars, liveHtml: job.liveHtml }
           }));
+        } else if (event.type === 'progress') {
+          // Step-progress from a multi-stage job (e.g. campaign orchestrator).
+          job.lastProgress = event;
+          window.dispatchEvent(new CustomEvent('genmanager:progress', {
+            detail: { jobId: job.id, presentationId: job.presentationId, progress: event }
+          }));
         } else if (event.type === 'done') {
           if (event.slide_count != null) job.slideCount = event.slide_count;
           if (event.new_index != null) job.newIndex = event.new_index;
           if (event.assets != null) job.assets = event.assets;
+          if (event.manifest != null) job.manifest = event.manifest;
         } else if (event.type === 'error') {
           throw new Error(event.message);
         }
+        // 'start' and other event types are ignored (no-op).
       }
       job.status = 'done';
       this._updateCard(job);
@@ -124,6 +132,7 @@ class GenerationManager {
       slideCount: job.slideCount,
       newIndex: job.newIndex,
       assets: job.assets,
+      manifest: job.manifest || null,
       error: job.error,
       status: job.status,
       limitInfo: job.limitInfo || null,

@@ -12,6 +12,7 @@ const CONFIG = {
   story: { route: 'story-studio', ns: 'storyStudio', icon: '✎', accent: 'var(--mod-stories)' },
   voice: { route: 'voice-studio', ns: 'voiceStudio', icon: '◌', accent: 'var(--mod-voice)' },
   music: { route: 'music-studio', ns: 'musicStudio', icon: '♪', accent: 'var(--mod-music)' },
+  campaign: { route: 'campaign-studio', ns: 'campaignStudio', icon: '◆', accent: 'var(--mod-campaigns)' },
 };
 
 function formatDate(iso) {
@@ -22,6 +23,21 @@ function previewHTML(c, cfg) {
   if (c.type === 'story') {
     const text = (c.parameters?.content || c.prompt || '').slice(0, 160);
     return `<div style="padding:16px;font-size:12px;line-height:1.6;color:var(--text-muted);overflow:hidden">${text ? escHtml(text) + '…' : `<span style="font-size:48px;opacity:.3">${cfg.icon}</span>`}</div>`;
+  }
+  if (c.type === 'campaign') {
+    const b = c.parameters?.brand;
+    if (b && b.palette) {
+      const p = b.palette;
+      return `<div style="height:100%;display:flex;flex-direction:column">
+        <div style="flex:1;display:flex">
+          <span style="flex:1;background:${escHtml(p.primary || '#7c3aed')}"></span>
+          <span style="flex:1;background:${escHtml(p.accent || '#06b6d4')}"></span>
+          <span style="flex:1;background:${escHtml(p.bg || '#05070f')}"></span>
+        </div>
+        <div style="padding:10px 12px;font-size:13px;font-weight:600;color:var(--text)">${escHtml(b.name || '')}</div>
+      </div>`;
+    }
+    return `<div class="presentation-card-preview-placeholder" style="color:${cfg.accent}">${cfg.icon}</div>`;
   }
   // audio cover = play glyph
   return `<div class="presentation-card-preview-placeholder" style="color:${cfg.accent}">${c.asset_count > 0 ? '▶' : cfg.icon}</div>`;
@@ -108,5 +124,8 @@ function bindCards(cfg) {
 }
 
 function typeFromRoute(route) {
-  return route === 'story-studio' ? 'story' : route === 'voice-studio' ? 'voice' : 'music';
+  return route === 'story-studio' ? 'story'
+    : route === 'voice-studio' ? 'voice'
+    : route === 'campaign-studio' ? 'campaign'
+    : 'music';
 }

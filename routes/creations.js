@@ -15,13 +15,14 @@ const ent = require('../services/entitlements');
 const imageGenerator = require('../services/imageGenerator');
 const audioGenerator = require('../services/audioGenerator');
 const aiProvider = require('../services/aiProvider');
+const claude = require('../services/claude');
 const assetStore = require('../services/assetStore');
 
 // Supported creation types and the feature flag each requires.
-const TYPE_FEATURE = { image: 'imageStudio', story: 'storyStudio', voice: 'audioStudio', music: 'audioStudio' };
+const TYPE_FEATURE = { image: 'imageStudio', story: 'storyStudio', voice: 'audioStudio', music: 'audioStudio', campaign: 'campaignStudio' };
 
 const DEFAULT_TITLES = {
-  image: 'Neues Bildprojekt', story: 'Neue Story', voice: 'Neues Voiceover', music: 'Neuer Sound',
+  image: 'Neues Bildprojekt', story: 'Neue Story', voice: 'Neues Voiceover', music: 'Neuer Sound', campaign: 'Neue Kampagne',
 };
 
 // Upgrade suggestion (mirror middleware/entitlements upgradeInfo).
@@ -69,6 +70,15 @@ function getTextProviderSettings() {
   const prefs = getGlobalPrefs();
   const provider = prefs.storyProvider || prefs.aiProvider || 'anthropic';
   const cfg = (prefs.storyProviders || prefs.aiProviders || {})[provider] || {};
+  const model = cfg.model || aiProvider.DEFAULT_MODELS[provider];
+  return { provider, model, apiKey: cfg.apiKey || '' };
+}
+
+// Presentation text provider (ai* group) — used by the campaign deck step.
+function getPresentationProviderSettings() {
+  const prefs = getGlobalPrefs();
+  const provider = prefs.aiProvider || 'anthropic';
+  const cfg = (prefs.aiProviders || {})[provider] || {};
   const model = cfg.model || aiProvider.DEFAULT_MODELS[provider];
   return { provider, model, apiKey: cfg.apiKey || '' };
 }
@@ -156,6 +166,7 @@ function serializeCreation(row, { withAssets = false } = {}) {
     cover_url: cover ? assetUrl(row.id, cover.id) : null,
     asset_count: assets.length,
     parameters: JSON.parse(row.parameters || '{}'),
+    campaign_id: row.campaign_id || null,
     tags: JSON.parse(row.tags || '[]'),
     share_token: row.share_token,
     view_count: row.view_count,
@@ -183,7 +194,9 @@ router.get('/status', (req, res) => {
 router.get('/', (req, res) => {
   const { type } = req.query;
   const userId = req.session.userId;
-  let query = 'SELECT * FROM creations WHERE user_id = ?';
+  // campaign_id IS NULL keeps campaign child artifacts out of the standalone
+  // libraries (they are shown nested in the campaign board instead).
+  let query = 'SELECT * FROM creations WHERE user_id = ? AND campaign_id IS NULL';
   const params = [userId];
   if (type) { query += ' AND type = ?'; params.push(type); }
   query += ' ORDER BY updated_at DESC';
@@ -435,10 +448,213 @@ router.delete('/:id/share', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Campaign-Orchestrator (SSE) ─────────────────────────────────────────────
+// One brief → a coordinated campaign: brand → deck → hero images → copy → voice.
+// Calls the service layer directly and streams per-step progress events.
+
+const campaignLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 5,
+  message: { error: 'Zu viele Kampagnen-Anfragen. Bitte kurz warten.' },
+});
+
+const BRAND_SYSTEM = `Du bist ein Markenstratege. Leite aus dem Briefing eine kohärente Marke ab und gib AUSSCHLIESSLICH gültiges JSON zurück (keine Vorrede, kein Markdown) mit exakt diesen Feldern:
+{"name": string, "tagline": string, "palette": {"primary": "#hex", "accent": "#hex", "bg": "#hex"}, "font": string, "tone": string, "audience": string, "keyMessages": [string, string, string]}
+Die Farben müssen zueinander passen (dunkler bg, lesbarer Kontrast). font = ein gängiger Google-Font-Name.`;
+
+function fallbackBrand(brief) {
+  const name = (brief || 'Brand').split(/\s+/).slice(0, 2).join(' ').replace(/[^\p{L}\p{N} ]/gu, '') || 'Brand';
+  return {
+    name, tagline: brief ? brief.slice(0, 60) : 'Crafted with care.',
+    palette: { primary: '#7c3aed', accent: '#06b6d4', bg: '#05070f' },
+    font: 'Inter', tone: 'modern, confident', audience: 'general',
+    keyMessages: [],
+  };
+}
+
+function brandToTheme(b) {
+  const p = b.palette || {};
+  return { primaryColor: p.primary, accentColor: p.accent, bgColor: p.bg, font: b.font, style: 'campaign', tone: b.tone };
+}
+
+function countSlides(html) {
+  return (String(html || '').match(/class="slide(?:\s|")/g) || []).length;
+}
+
+router.post('/:id/orchestrate', campaignLimiter, async (req, res) => {
+  if (!assertOwner(req, res)) return;
+  const userId = req.session.userId;
+  const campaign = db.prepare('SELECT * FROM creations WHERE id = ?').get(req.params.id);
+  if (!campaign || campaign.type !== 'campaign') return res.status(400).json({ error: 'Keine Kampagne' });
+
+  // Pre-stream gates (JSON, before SSE headers).
+  if (denyFeature(res, userId, 'campaign')) return;
+  if (denyQuota(res, ent.canGenerateCampaign(userId))) return;
+
+  const brief = (req.body && req.body.brief || '').trim();
+  if (!brief) return res.status(400).json({ error: 'Briefing erforderlich' });
+
+  // ── SSE ──
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+    Connection: 'keep-alive', 'X-Accel-Buffering': 'no',
+  });
+  if (res.flushHeaders) res.flushHeaders();
+  req.setTimeout(0); res.setTimeout(0);
+  let aborted = false;
+  req.on('close', () => { aborted = true; });
+  const send = (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+
+  const steps = ['brand', 'deck', 'images', 'copy', 'voice'];
+  send({ type: 'start', steps });
+
+  // Resolvers
+  const textS = getTextProviderSettings();
+  const presS = getPresentationProviderSettings();
+  const imgS = getImageProviderSettings();
+  const voiceS = getAudioProviderSettings('voice');
+
+  const manifest = { brief, artifacts: {}, version: 1 };
+  let brand = null;
+  const persist = () => db.prepare(
+    "UPDATE creations SET parameters = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(JSON.stringify({ brief, brand, artifacts: manifest.artifacts }), campaign.id);
+
+  const newChild = (type, title) => {
+    const cid = uuid();
+    db.prepare('INSERT INTO creations (id, type, title, user_id, campaign_id) VALUES (?,?,?,?,?)')
+      .run(cid, type, title, userId, campaign.id);
+    return cid;
+  };
+
+  // ── Step 1: BRAND (fatal) ──
+  try {
+    send({ type: 'progress', step: 'brand', status: 'running', label: 'Markenidentität wird abgeleitet…' });
+    if (!textS.apiKey) throw new Error(NO_KEY_MSG(textS.provider));
+    const raw = await aiProvider.generateText({ ...textS, json: true, systemPrompt: BRAND_SYSTEM, messages: [{ role: 'user', content: brief }] });
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '')) : raw;
+      brand = { ...fallbackBrand(brief), ...parsed, palette: { ...fallbackBrand(brief).palette, ...(parsed.palette || {}) } };
+    } catch (_) {
+      brand = fallbackBrand(brief); // malformed JSON → neutral brand, keep going
+    }
+    ent.incrementUsage(userId, 'campaign_generations'); // charge ONCE, only after brand succeeds
+    persist();
+    send({ type: 'progress', step: 'brand', status: 'done', label: 'Marke fertig', brand });
+  } catch (err) {
+    send({ type: 'error', step: 'brand', message: err.message });
+    return res.end();
+  }
+  if (aborted) return res.end();
+
+  // Helper for tolerant steps
+  const tolerant = async (step, label, fn) => {
+    if (aborted) return;
+    send({ type: 'progress', step, status: 'running', label });
+    try {
+      const result = await fn();
+      manifest.artifacts[step] = { status: 'done', error: null, ...result };
+      persist();
+      send({ type: 'progress', step, status: 'done', label: `${label} ✓`, ...result });
+    } catch (err) {
+      manifest.artifacts[step] = { status: 'failed', error: err.message };
+      persist();
+      send({ type: 'progress', step, status: 'failed', label: 'Übersprungen', error: err.message });
+    }
+  };
+
+  // ── Step 2: DECK ──
+  await tolerant('deck', 'Pitch-Deck wird gestaltet…', async () => {
+    if (!presS.apiKey) throw new Error(NO_KEY_MSG(presS.provider));
+    const presId = uuid();
+    db.prepare('INSERT INTO presentations (id, title, user_id, campaign_id) VALUES (?,?,?,?)')
+      .run(presId, `${brand.name} — Deck`, userId, campaign.id);
+    const prompt = `Erstelle ein Marketing-/Pitch-Deck (6–8 Slides) für „${brand.name}". Tagline: ${brand.tagline}. Zielgruppe: ${brand.audience}. Kernbotschaften: ${(brand.keyMessages || []).join('; ')}. Kontext: ${brief}.`;
+    const { html } = await claude.generatePresentation({
+      prompt, templateTheme: brandToTheme(brand),
+      model: presS.model, provider: presS.provider, apiKey: presS.apiKey,
+    });
+    db.prepare("UPDATE presentations SET html_content = ?, slide_count = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(html, countSlides(html), presId);
+    return { kind: 'presentation', artifactId: presId };
+  });
+
+  // ── Step 3: IMAGES ──
+  await tolerant('images', 'Hero-Bilder werden generiert…', async () => {
+    if (!imgS.apiKey) throw new Error(NO_KEY_MSG(imgS.provider));
+    const cid = newChild('image', `${brand.name} — Bilder`);
+    const p = brand.palette || {};
+    const prompt = `${brand.name}: ${brand.tagline}. Hero-Marketingbild. Stimmung: ${brand.tone}. Farbpalette: ${p.primary}, ${p.accent}. Zielgruppe: ${brand.audience}. Premium, markenkonform, ohne Text.`;
+    const result = await imageGenerator.generateImage({
+      provider: imgS.provider, apiKey: imgS.apiKey, model: imgS.model,
+      prompt, size: imageGenerator.sizeForAspect('16:9'), n: 3,
+    });
+    const insert = db.prepare(`INSERT INTO creation_assets (id, creation_id, kind, file_path, mime_type, width, height, bytes, prompt, seed, position) VALUES (?, ?, 'image', ?, ?, ?, ?, ?, ?, ?, ?)`);
+    let coverId = null;
+    result.assets.forEach((a, i) => {
+      const { filePath, bytes } = assetStore.saveBuffer(a.buffer, a.mimeType);
+      const aid = uuid();
+      insert.run(aid, cid, filePath, a.mimeType, a.width, a.height, bytes, prompt, a.seed, i);
+      if (i === 0) coverId = aid;
+    });
+    db.prepare("UPDATE creations SET prompt = ?, provider = ?, model = ?, cover_asset_id = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(prompt, result.provider, result.model, coverId, cid);
+    return { kind: 'image', artifactId: cid, assetCount: result.assets.length };
+  });
+
+  // ── Step 4: COPY ──
+  let copyText = '';
+  await tolerant('copy', 'Texte werden geschrieben…', async () => {
+    if (!textS.apiKey) throw new Error(NO_KEY_MSG(textS.provider));
+    const cid = newChild('story', `${brand.name} — Copy`);
+    const text = await aiProvider.generateText({
+      ...textS, systemPrompt: `Du bist ein Marketing-Texter. Tonalität: ${brand.tone}. Gib nur den Text zurück.`,
+      messages: [{ role: 'user', content: `Schreibe einen einprägsamen Slogan und einen kurzen Marketing-Body (3–4 Sätze) für „${brand.name}". Tagline: ${brand.tagline}. Zielgruppe: ${brand.audience}. Kernbotschaften: ${(brand.keyMessages || []).join('; ')}.` }],
+    });
+    copyText = text;
+    db.prepare("UPDATE creations SET prompt = ?, provider = ?, model = ?, parameters = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(brief, textS.provider, textS.model, JSON.stringify({ content: text }), cid);
+    return { kind: 'story', artifactId: cid };
+  });
+
+  // ── Step 5: VOICE ──
+  await tolerant('voice', 'Voiceover wird erzeugt…', async () => {
+    if (!voiceS.apiKey) throw new Error(NO_KEY_MSG(voiceS.provider));
+    const cid = newChild('voice', `${brand.name} — Voiceover`);
+    const line = `${brand.tagline}${copyText ? ' ' + copyText.split('\n')[0] : ''}`.slice(0, 400);
+    const result = await audioGenerator.generateAudio({
+      mode: 'voice', provider: voiceS.provider, apiKey: voiceS.apiKey,
+      text: line, voiceId: voiceS.voiceId, ttsModel: voiceS.model,
+    });
+    const { filePath, bytes } = assetStore.saveBuffer(result.buffer, result.mimeType);
+    const aid = uuid();
+    db.prepare(`INSERT INTO creation_assets (id, creation_id, kind, file_path, mime_type, duration_ms, bytes, prompt, position) VALUES (?, ?, 'audio', ?, ?, ?, ?, ?, 0)`)
+      .run(aid, cid, filePath, result.mimeType, result.durationMs, bytes, line);
+    db.prepare("UPDATE creations SET prompt = ?, provider = ?, model = 'voice', cover_asset_id = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(line, voiceS.provider, aid, cid);
+    return { kind: 'voice', artifactId: cid };
+  });
+
+  persist();
+  send({ type: 'done', manifest: { brief, brand, artifacts: manifest.artifacts } });
+  res.end();
+});
+
 // ─── Delete creation (+ its files) ───────────────────────────────────────────
 
 router.delete('/:id', (req, res) => {
   if (!assertOwner(req, res)) return;
+  const row = db.prepare('SELECT type FROM creations WHERE id = ?').get(req.params.id);
+
+  // Campaign hub: cascade-delete child artifacts (soft-ref, no DB cascade).
+  if (row && row.type === 'campaign') {
+    const children = db.prepare('SELECT id FROM creations WHERE campaign_id = ?').all(req.params.id);
+    for (const c of children) {
+      assetStore.deleteForCreation(c.id);
+      db.prepare('DELETE FROM creations WHERE id = ?').run(c.id);
+    }
+    db.prepare('DELETE FROM presentations WHERE campaign_id = ?').run(req.params.id);
+  }
+
   assetStore.deleteForCreation(req.params.id); // unlink files first
   db.prepare('DELETE FROM creations WHERE id = ?').run(req.params.id); // cascade removes asset rows
   res.json({ ok: true });

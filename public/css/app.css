@@ -47,6 +47,7 @@
   --mod-music: #f59e0b;
   --mod-voice: #10b981;
   --mod-stories: #3b82f6;
+  --mod-campaigns: #f43f5e;
 
   --grad-brand: linear-gradient(135deg, var(--primary), var(--accent));
   --grad-images: linear-gradient(135deg, var(--mod-images), var(--primary-light));
@@ -2070,6 +2071,7 @@ body.studio-resizing iframe { pointer-events: none; }
 .nav-item[data-modality="music"] .nav-icon { color: var(--mod-music); }
 .nav-item[data-modality="voice"] .nav-icon { color: var(--mod-voice); }
 .nav-item[data-modality="stories"] .nav-icon { color: var(--mod-stories); }
+.nav-item[data-modality="campaigns"] .nav-icon { color: var(--mod-campaigns); }
 
 /* ─── Hub ────────────────────────────────────────────────────────────────── */
 .hub-hero-title {
@@ -2243,6 +2245,60 @@ body.studio-resizing iframe { pointer-events: none; }
 .audio-card-prompt { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5; }
 .audio-card audio { width: 100%; height: 38px; }
 .audio-card-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* ─── Campaign Studio ────────────────────────────────────────────────────── */
+.campaign-stepper { display: flex; flex-direction: column; gap: 10px; }
+.campaign-step {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--border);
+  background: var(--bg-card); transition: border-color 0.25s, opacity 0.25s; opacity: 0.55;
+}
+.campaign-step-running { opacity: 1; border-color: var(--mod-campaigns); box-shadow: 0 0 18px rgba(244,63,94,0.18); }
+.campaign-step-done { opacity: 1; }
+.campaign-step-failed { opacity: 1; border-color: var(--danger); }
+.campaign-step-icon { width: 22px; text-align: center; font-weight: 700; color: var(--mod-campaigns); }
+.campaign-step-done .campaign-step-icon { color: var(--success); }
+.campaign-step-failed .campaign-step-icon { color: var(--danger); }
+.campaign-step-label { font-weight: 600; flex: 1; }
+.campaign-step-status { font-size: 12px; color: var(--text-muted); }
+.campaign-step .gen-dots { display: inline-flex; gap: 3px; }
+.campaign-step .gen-dots span { width: 5px; height: 5px; }
+
+.campaign-board { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.campaign-brand-header {
+  position: relative; overflow: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--c-primary) 22%, transparent), transparent 55%),
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--c-accent) 22%, transparent), transparent 55%),
+    var(--bg-card);
+}
+.campaign-brand-name {
+  font-size: 30px; font-weight: 800; letter-spacing: -0.02em;
+  background: linear-gradient(120deg, var(--c-primary), var(--c-accent));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.campaign-brand-tagline { font-size: 16px; color: var(--text); opacity: 0.85; margin-top: 4px; }
+.campaign-brand-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.campaign-swatches { display: inline-flex; gap: 6px; }
+.campaign-swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); }
+.campaign-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--bg-input); border: 1px solid var(--border); color: var(--text-muted);
+}
+.campaign-keymsgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.campaign-partial {
+  font-size: 13px; padding: 10px 14px; border-radius: var(--radius);
+  background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); color: var(--warning);
+}
+.campaign-section-head { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+.campaign-deck-frame { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: #000; }
+.campaign-deck-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.campaign-image-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.campaign-image-tile { display: block; aspect-ratio: 16/9; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+.campaign-image-tile img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+.campaign-image-tile:hover img { transform: scale(1.05); }
+.campaign-copy-text { font-size: 15px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+@media (max-width: 640px) { .campaign-image-grid { grid-template-columns: 1fr 1fr; } }
 
 /* ─── Admin: per-studio AI key blocks ────────────────────────────────────── */
 .ai-studio-section { padding: 18px 0; border-top: 1px solid var(--border); }

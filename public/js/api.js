@@ -133,6 +133,10 @@ export const api = {
     share: (id) => apiFetch(`/creations/${id}/share`, { method: 'POST' }),
     unshare: (id) => apiFetch(`/creations/${id}/share`, { method: 'DELETE' }),
     deleteAsset: (id, assetId) => apiFetch(`/creations/${id}/assets/${assetId}`, { method: 'DELETE' }),
+    // Campaign-Orchestrator: real SSE stream of step-progress events.
+    orchestrate: async function* (id, body = {}, signal) {
+      yield* readSseStream(`${API_BASE}/creations/${id}/orchestrate`, body, signal);
+    },
     // Synchronous generation wrapped as a single-yield generator (drives genManager).
     generate: async function* (id, body = {}, signal) {
       const res = await fetch(`${API_BASE}/creations/${id}/generate`, {

@@ -10,6 +10,7 @@ function formatDate(iso) {
 }
 
 const MODALITIES = [
+  { key: 'campaign',      icon: '◆', accent: 'var(--mod-campaigns)',     href: '#campaigns', active: true },
   { key: 'presentations', icon: '◈', accent: 'var(--mod-presentations)', href: '#dashboard', active: true },
   { key: 'images',        icon: '❖', accent: 'var(--mod-images)',        href: '#gallery',   active: true },
   { key: 'stories',       icon: '✎', accent: 'var(--mod-stories)',       href: '#stories',   active: true },
@@ -39,6 +40,7 @@ function tileHTML(m, i) {
 // Multilingual keyword scoring (en/de + a few it/nl/pl terms). Highest score
 // wins; ties / no match fall back to image (most prompt-driven modality).
 const INTENT = [
+  { kind: 'campaign', words: ['campaign', 'launch', 'rebrand', 'go-to-market', 'marketing campaign', 'brand identity', 'kampagne', 'markteinführung', 'marken', 'rebranding', 'campagna', 'campagne', 'kampania', 'lancering', 'lancio'] },
   { kind: 'image', words: ['image', 'images', 'picture', 'photo', 'photograph', 'draw', 'drawing', 'illustration', 'logo', 'render', 'art', 'artwork', 'painting', 'poster', 'wallpaper', 'icon', 'visual', 'bild', 'bilder', 'foto', 'zeichne', 'zeichnung', 'gemälde', 'grafik', 'plakat', 'immagine', 'immagini', 'afbeelding', 'obraz', 'rysunek'] },
   { kind: 'music', words: ['music', 'song', 'track', 'beat', 'melody', 'tune', 'jingle', 'sound', 'sfx', 'soundtrack', 'ambient', 'musik', 'lied', 'melodie', 'klang', 'geräusch', 'soundeffekt', 'musica', 'suono', 'muziek', 'geluid', 'muzyka', 'dźwięk', 'piosenka'] },
   { kind: 'voice', words: ['voice', 'voiceover', 'voice-over', 'narrate', 'narration', 'speak', 'speech', 'tts', 'dub', 'read aloud', 'stimme', 'sprich', 'sprecher', 'vorlesen', 'erzähler', 'voce', 'narrazione', 'stem', 'inspreken', 'głos', 'lektor', 'narracja'] },
@@ -62,6 +64,7 @@ function classifyIntent(text) {
 
 // kind → how to create the project, where to stash the seed prompt, where to go.
 const CREATE = {
+  campaign:     { seed: 'campaignStudioSeedPrompt', route: 'campaign-studio', make: (title) => api.creations.create('campaign', { title }) },
   image:        { seed: 'imageStudioSeedPrompt', route: 'image-studio', make: (title) => api.images.create({ title }) },
   presentation: { seed: 'studioSeedPrompt',      route: 'studio',       make: (title) => api.presentations.create({ title: title || 'Neue Präsentation' }) },
   story:        { seed: 'storyStudioSeedPrompt', route: 'story-studio', make: (title) => api.creations.create('story', { title }) },
@@ -89,15 +92,20 @@ function recentCardHTML(item) {
 export async function renderHub(container) {
   const name = (window.__currentUser?.name || '').split(' ')[0] || '';
 
-  const [presentations, images, stories, voices, sounds] = await Promise.all([
+  const [presentations, images, stories, voices, sounds, campaigns] = await Promise.all([
     api.presentations.list().catch(() => []),
     api.images.list().catch(() => []),
     api.creations.list('story').catch(() => []),
     api.creations.list('voice').catch(() => []),
     api.creations.list('music').catch(() => []),
+    api.creations.list('campaign').catch(() => []),
   ]);
 
   const recent = [
+    ...campaigns.map(c => ({
+      id: c.id, title: c.title, updated_at: c.updated_at,
+      route: `#campaign-studio/${c.id}`, icon: '◆', badge: t('hub.tiles.campaign.title'), thumb: null,
+    })),
     ...presentations.map(p => ({
       id: p.id, title: p.title, updated_at: p.updated_at,
       route: `#studio/${p.id}`, icon: '◈', badge: t('hub.tiles.presentations.title'), thumb: null,

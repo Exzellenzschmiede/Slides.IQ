@@ -26,6 +26,7 @@ const NAV_GROUP = {
   'story-studio': 'stories',
   'voice-studio': 'voices',
   'music-studio': 'sounds',
+  'campaign-studio': 'campaigns',
 };
 
 export function rerenderCurrentView() {

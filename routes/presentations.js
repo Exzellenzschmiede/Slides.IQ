@@ -73,6 +73,7 @@ router.get('/', (req, res) => {
     LEFT JOIN presentation_shares ps ON ps.presentation_id = p.id AND ps.user_id = ?
     LEFT JOIN users u ON u.id = p.user_id
     WHERE (p.user_id = ? OR ps.user_id = ?)
+      AND p.campaign_id IS NULL
   `;
   const params = [userId, userId, userId, userId];
 
