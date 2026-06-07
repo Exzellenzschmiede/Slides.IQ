@@ -208,16 +208,21 @@ async function _generateTextAnthropic({ apiKey, model, messages, systemPrompt, j
   const client = new Anthropic({ apiKey });
 
   const maxTokens = model.includes('haiku') ? 8000 : 32000;
-  // Force JSON via assistant prefill: the model continues from "{", so the
-  // reply is guaranteed to be a JSON object (no markdown/prose). We prepend the
-  // "{" back to the returned continuation.
-  const msgs = json ? [...messages, { role: 'assistant', content: '{' }] : messages;
-  const params = { model, max_tokens: maxTokens, messages: msgs };
-  if (systemPrompt) params.system = systemPrompt;
+  // Enforce JSON via instruction, NOT assistant prefill: newer Anthropic models
+  // (Opus/Sonnet 4.x) reject a trailing assistant message ("does not support
+  // assistant message prefill"). Callers parse robustly (strip fences, extract
+  // the JSON object), so a strong system instruction is sufficient.
+  let sys = systemPrompt;
+  if (json) {
+    const jsonRule = 'Respond with ONLY a single raw JSON object. No markdown, no code fences, no prose before or after.';
+    sys = sys ? `${sys}\n\n${jsonRule}` : jsonRule;
+  }
+  const params = { model, max_tokens: maxTokens, messages };
+  if (sys) params.system = sys;
 
   const response = await client.messages.create(params);
   const text = response.content[0]?.text || '';
-  return json ? '{' + text : text;
+  return text;
 }
 
 // ─── OpenAI-compatible implementation (OpenAI + Mistral) ─────────────────────
