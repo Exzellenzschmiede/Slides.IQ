@@ -35,6 +35,40 @@ function tileHTML(m, i) {
   return `<div class="hub-tile hub-tile-soon" data-soon="1" style="${style}">${inner}</div>`;
 }
 
+// ─── Intent detection — route the quick-create text to the right studio ─────
+// Multilingual keyword scoring (en/de + a few it/nl/pl terms). Highest score
+// wins; ties / no match fall back to image (most prompt-driven modality).
+const INTENT = [
+  { kind: 'image', words: ['image', 'images', 'picture', 'photo', 'photograph', 'draw', 'drawing', 'illustration', 'logo', 'render', 'art', 'artwork', 'painting', 'poster', 'wallpaper', 'icon', 'visual', 'bild', 'bilder', 'foto', 'zeichne', 'zeichnung', 'gemälde', 'grafik', 'plakat', 'immagine', 'immagini', 'afbeelding', 'obraz', 'rysunek'] },
+  { kind: 'music', words: ['music', 'song', 'track', 'beat', 'melody', 'tune', 'jingle', 'sound', 'sfx', 'soundtrack', 'ambient', 'musik', 'lied', 'melodie', 'klang', 'geräusch', 'soundeffekt', 'musica', 'suono', 'muziek', 'geluid', 'muzyka', 'dźwięk', 'piosenka'] },
+  { kind: 'voice', words: ['voice', 'voiceover', 'voice-over', 'narrate', 'narration', 'speak', 'speech', 'tts', 'dub', 'read aloud', 'stimme', 'sprich', 'sprecher', 'vorlesen', 'erzähler', 'voce', 'narrazione', 'stem', 'inspreken', 'głos', 'lektor', 'narracja'] },
+  { kind: 'story', words: ['story', 'script', 'screenplay', 'poem', 'blog', 'article', 'novel', 'tale', 'copy', 'write', 'essay', 'letter', 'geschichte', 'schreib', 'skript', 'drehbuch', 'gedicht', 'artikel', 'roman', 'erzählung', 'text', 'brief', 'storia', 'racconto', 'scrivi', 'verhaal', 'schrijf', 'historia', 'opowiadanie', 'napisz'] },
+  { kind: 'presentation', words: ['presentation', 'slide', 'slides', 'deck', 'pitch', 'keynote', 'slideshow', 'präsentation', 'folie', 'folien', 'vortrag', 'presentazione', 'diapositive', 'presentatie', 'prezentacja', 'slajd'] },
+];
+
+function classifyIntent(text) {
+  const s = ' ' + text.toLowerCase() + ' ';
+  let best = null, bestScore = 0;
+  for (const intent of INTENT) {
+    let score = 0;
+    for (const w of intent.words) {
+      const re = new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+      if (re.test(s)) score++;
+    }
+    if (score > bestScore) { bestScore = score; best = intent.kind; }
+  }
+  return best || 'image';
+}
+
+// kind → how to create the project, where to stash the seed prompt, where to go.
+const CREATE = {
+  image:        { seed: 'imageStudioSeedPrompt', route: 'image-studio', make: (title) => api.images.create({ title }) },
+  presentation: { seed: 'studioSeedPrompt',      route: 'studio',       make: (title) => api.presentations.create({ title: title || 'Neue Präsentation' }) },
+  story:        { seed: 'storyStudioSeedPrompt', route: 'story-studio', make: (title) => api.creations.create('story', { title }) },
+  voice:        { seed: 'voiceStudioSeedPrompt', route: 'voice-studio', make: (title) => api.creations.create('voice', { title }) },
+  music:        { seed: 'musicStudioSeedPrompt', route: 'music-studio', make: (title) => api.creations.create('music', { title }) },
+};
+
 function recentCardHTML(item) {
   const thumb = item.thumb
     ? `<img src="${item.thumb}" loading="lazy" style="width:100%;height:100%;object-fit:cover">`
@@ -55,21 +89,36 @@ function recentCardHTML(item) {
 export async function renderHub(container) {
   const name = (window.__currentUser?.name || '').split(' ')[0] || '';
 
-  const [presentations, images] = await Promise.all([
+  const [presentations, images, stories, voices, sounds] = await Promise.all([
     api.presentations.list().catch(() => []),
     api.images.list().catch(() => []),
+    api.creations.list('story').catch(() => []),
+    api.creations.list('voice').catch(() => []),
+    api.creations.list('music').catch(() => []),
   ]);
 
   const recent = [
     ...presentations.map(p => ({
-      type: 'presentation', id: p.id, title: p.title, updated_at: p.updated_at,
+      id: p.id, title: p.title, updated_at: p.updated_at,
       route: `#studio/${p.id}`, icon: '◈', badge: t('hub.tiles.presentations.title'), thumb: null,
     })),
     ...images.map(c => ({
-      type: 'image', id: c.id, title: c.title, updated_at: c.updated_at,
+      id: c.id, title: c.title, updated_at: c.updated_at,
       route: `#image-studio/${c.id}`, icon: '❖', badge: t('hub.tiles.images.title'), thumb: c.cover_url,
     })),
-  ].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 8);
+    ...stories.map(c => ({
+      id: c.id, title: c.title, updated_at: c.updated_at,
+      route: `#story-studio/${c.id}`, icon: '✎', badge: t('hub.tiles.stories.title'), thumb: null,
+    })),
+    ...voices.map(c => ({
+      id: c.id, title: c.title, updated_at: c.updated_at,
+      route: `#voice-studio/${c.id}`, icon: '◌', badge: t('hub.tiles.voice.title'), thumb: null,
+    })),
+    ...sounds.map(c => ({
+      id: c.id, title: c.title, updated_at: c.updated_at,
+      route: `#music-studio/${c.id}`, icon: '♪', badge: t('hub.tiles.music.title'), thumb: null,
+    })),
+  ].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 12);
 
   container.innerHTML = `
     <div class="view-header">
@@ -80,9 +129,9 @@ export async function renderHub(container) {
     </div>
 
     <div class="hub-quick">
-      <input type="text" id="hub-quick-input" class="form-input" placeholder="${t('hub.quickCreatePlaceholder')}">
-      <button class="question-chip" data-quick="image">❖ ${t('nav.images')}</button>
-      <button class="question-chip" data-quick="presentation">◈ ${t('nav.dashboard')}</button>
+      <span class="hub-quick-icon">✦</span>
+      <input type="text" id="hub-quick-input" class="form-input" placeholder="${t('hub.quickCreatePlaceholder')}" autocomplete="off">
+      <span class="hub-quick-hint">${t('hub.quickHint')} <kbd>↵</kbd></span>
     </div>
 
     <div class="hub-modality-grid">
@@ -101,27 +150,23 @@ export async function renderHub(container) {
     el.addEventListener('click', () => toastInfo(t('hub.comingSoon')));
   });
 
-  // Quick create
+  // Quick create — the text itself decides the target studio + seeds the prompt.
   const input = container.querySelector('#hub-quick-input');
-  const quickCreate = async (kind) => {
+  let creating = false;
+  const submit = async () => {
     const prompt = input.value.trim();
+    if (!prompt || creating) { input.focus(); return; }
+    creating = true;
+    const cfg = CREATE[classifyIntent(prompt)];
     try {
-      if (kind === 'image') {
-        const c = await api.images.create({ title: prompt ? prompt.slice(0, 60) : undefined });
-        if (prompt) sessionStorage.setItem('imageStudioSeedPrompt', prompt);
-        navigate('image-studio', { id: c.id });
-      } else {
-        const p = await api.presentations.create({ title: prompt ? prompt.slice(0, 60) : 'Neue Präsentation' });
-        if (prompt) sessionStorage.setItem('studioSeedPrompt', prompt);
-        navigate('studio', { id: p.id });
-      }
+      const c = await cfg.make(prompt.slice(0, 60));
+      sessionStorage.setItem(cfg.seed, prompt);
+      navigate(cfg.route, { id: c.id });
     } catch (err) {
-      if (err.status === 402) { toastError(err.message); navigate('settings'); }
+      creating = false;
+      if (err.status === 402 || err.status === 403) { toastError(err.message); navigate('settings'); }
       else toastError(err.message);
     }
   };
-  container.querySelectorAll('[data-quick]').forEach(btn => {
-    btn.addEventListener('click', () => quickCreate(btn.dataset.quick));
-  });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') quickCreate('image'); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
 }

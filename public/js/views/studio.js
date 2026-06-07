@@ -103,6 +103,14 @@ export async function renderStudio(container, { id }) {
   container.classList.add('studio-mode');
   container.innerHTML = buildStudioHTML(currentPresentation);
   initStudio();
+
+  // Seed prompt handed over from the Hub quick-create field.
+  const seed = sessionStorage.getItem('studioSeedPrompt');
+  if (seed) {
+    sessionStorage.removeItem('studioSeedPrompt');
+    const input = document.getElementById('chat-input');
+    if (input) { input.value = seed; input.focus(); }
+  }
 }
 
 function buildStudioHTML(p) {
