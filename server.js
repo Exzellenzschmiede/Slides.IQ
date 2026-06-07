@@ -152,26 +152,32 @@ app.get('/api/admin/ai-settings', requireAdmin, (req, res) => {
   const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = row ? JSON.parse(row.value) : {};
   res.json({
+    // Per-studio AI config. Presentations use the legacy ai* group; Stories,
+    // Voice and Music get their own groups (with migration fallbacks).
     aiProvider: prefs.aiProvider || 'anthropic',
     aiProviders: prefs.aiProviders || {},
+    storyProvider: prefs.storyProvider || prefs.aiProvider || 'anthropic',
+    storyProviders: prefs.storyProviders || prefs.aiProviders || {},
     imageProvider: prefs.imageProvider || 'openai',
     imageProviders: prefs.imageProviders || {},
-    audioProvider: prefs.audioProvider || 'elevenlabs',
-    audioProviders: prefs.audioProviders || {}
+    voiceProvider: prefs.voiceProvider || prefs.audioProvider || 'elevenlabs',
+    voiceProviders: prefs.voiceProviders || prefs.audioProviders || {},
+    musicProvider: prefs.musicProvider || prefs.audioProvider || 'elevenlabs',
+    musicProviders: prefs.musicProviders || prefs.audioProviders || {}
   });
 });
 
 app.put('/api/admin/ai-settings', requireAdmin, (req, res) => {
   const db = require('./database');
-  const { aiProvider, aiProviders, imageProvider, imageProviders, audioProvider, audioProviders } = req.body;
+  const b = req.body || {};
   const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = row ? JSON.parse(row.value) : {};
-  prefs.aiProvider = aiProvider || prefs.aiProvider || 'anthropic';
-  if (aiProviders) prefs.aiProviders = aiProviders;
-  if (imageProvider) prefs.imageProvider = imageProvider;
-  if (imageProviders) prefs.imageProviders = imageProviders;
-  if (audioProvider) prefs.audioProvider = audioProvider;
-  if (audioProviders) prefs.audioProviders = audioProviders;
+  // Each studio is an independent {provider, providers} group.
+  for (const g of ['ai', 'story', 'image', 'voice', 'music']) {
+    if (b[g + 'Provider']) prefs[g + 'Provider'] = b[g + 'Provider'];
+    if (b[g + 'Providers']) prefs[g + 'Providers'] = b[g + 'Providers'];
+  }
+  if (!prefs.aiProvider) prefs.aiProvider = 'anthropic';
   db.prepare("INSERT OR REPLACE INTO settings (key, value, user_id) VALUES ('preferences', ?, '')").run(JSON.stringify(prefs));
   res.json({ ok: true });
 });

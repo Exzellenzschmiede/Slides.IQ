@@ -52,19 +52,24 @@ function getImageProviderSettings() {
   return { provider, model, apiKey };
 }
 
-function getAudioProviderSettings() {
+// Audio provider for Voice / Music studios. Each studio has its own group
+// (voice* / music*), falling back to the legacy shared audio* group.
+function getAudioProviderSettings(group) {
   const prefs = getGlobalPrefs();
-  const provider = prefs.audioProvider || 'elevenlabs';
-  const cfg = (prefs.audioProviders || {})[provider] || {};
-  return { provider, apiKey: cfg.apiKey || '', voiceId: cfg.voiceId, ttsModel: cfg.ttsModel, musicModel: cfg.musicModel };
+  const provider = prefs[group + 'Provider'] || prefs.audioProvider || 'elevenlabs';
+  const cfg = (prefs[group + 'Providers'] || prefs.audioProviders || {})[provider] || {};
+  // The unified UI stores the selected model in cfg.model; map it to the
+  // provider-specific field the audioGenerator expects.
+  return { provider, apiKey: cfg.apiKey || '', voiceId: cfg.voiceId, model: cfg.model, ttsModel: cfg.model || cfg.ttsModel, musicModel: cfg.model || cfg.musicModel };
 }
 
-// Text generation provider (Story studio) — shared with the presentation AI.
+// Text generation provider (Story studio) — its own group, fallback to the
+// presentation AI (ai*) group for a smooth migration.
 function getTextProviderSettings() {
   const prefs = getGlobalPrefs();
-  const provider = prefs.aiProvider || 'anthropic';
-  const cfg = (prefs.aiProviders || {})[provider] || {};
-  const model = cfg.model || prefs.mainModel || aiProvider.DEFAULT_MODELS[provider];
+  const provider = prefs.storyProvider || prefs.aiProvider || 'anthropic';
+  const cfg = (prefs.storyProviders || prefs.aiProviders || {})[provider] || {};
+  const model = cfg.model || aiProvider.DEFAULT_MODELS[provider];
   return { provider, model, apiKey: cfg.apiKey || '' };
 }
 
@@ -309,7 +314,7 @@ async function handleAudio(req, res, row, userId) {
 
   // voice → TTS; music type carries mode 'music' (default) or 'sound'.
   const genMode = row.type === 'voice' ? 'voice' : (mode === 'sound' ? 'sound' : 'music');
-  const { provider, apiKey, voiceId: defVoice, ttsModel, musicModel } = getAudioProviderSettings();
+  const { provider, apiKey, voiceId: defVoice, ttsModel, musicModel } = getAudioProviderSettings(row.type === 'voice' ? 'voice' : 'music');
   if (!apiKey) return res.status(400).json({ error: NO_KEY_MSG(provider) });
 
   const result = await audioGenerator.generateAudio({

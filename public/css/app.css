@@ -2226,3 +2226,16 @@ body.studio-resizing iframe { pointer-events: none; }
 .audio-card-prompt { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5; }
 .audio-card audio { width: 100%; height: 38px; }
 .audio-card-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* ─── Admin: per-studio AI key blocks ────────────────────────────────────── */
+.ai-studio-section { padding: 18px 0; border-top: 1px solid var(--border); }
+.ai-studio-section:first-of-type { padding-top: 0; border-top: none; }
+.ai-studio-head {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px;
+}
+.ai-studio-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--bg-card); border: 1px solid var(--border); font-size: 15px;
+}

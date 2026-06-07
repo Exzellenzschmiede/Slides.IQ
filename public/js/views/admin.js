@@ -10,7 +10,9 @@ function escHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const PROVIDERS = [
+// ─── Provider catalogs (grouped per modality) ───────────────────────────────
+// Text providers (used by Presentations + Stories).
+const TEXT_PROVIDERS = [
   {
     id: 'anthropic', label: 'Anthropic Claude', logo: '◈',
     models: [
@@ -18,8 +20,7 @@ const PROVIDERS = [
       { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 (empfohlen)' },
       { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (schnell)' },
     ],
-    keyPlaceholder: 'sk-ant-...',
-    keyHint: 'console.anthropic.com',
+    keyPlaceholder: 'sk-ant-...', keyHint: 'console.anthropic.com',
   },
   {
     id: 'openai', label: 'OpenAI ChatGPT', logo: '⬡',
@@ -29,8 +30,7 @@ const PROVIDERS = [
       { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (schnell)' },
       { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (günstig)' },
     ],
-    keyPlaceholder: 'sk-...',
-    keyHint: 'platform.openai.com',
+    keyPlaceholder: 'sk-...', keyHint: 'platform.openai.com',
   },
   {
     id: 'mistral', label: 'Mistral Le Chat', logo: '🌊',
@@ -40,8 +40,7 @@ const PROVIDERS = [
       { value: 'mistral-small-latest',    label: 'Mistral Small 4 (schnell)' },
       { value: 'magistral-medium-latest', label: 'Magistral Medium (Reasoning)' },
     ],
-    keyPlaceholder: 'Dein Mistral API-Key',
-    keyHint: 'console.mistral.ai',
+    keyPlaceholder: 'Dein Mistral API-Key', keyHint: 'console.mistral.ai',
   },
   {
     id: 'gemini', label: 'Google Gemini', logo: '✦',
@@ -50,50 +49,141 @@ const PROVIDERS = [
       { value: 'gemini-3.5-flash',        label: 'Gemini 3.5 Flash (empfohlen)' },
       { value: 'gemini-3.1-flash-lite',   label: 'Gemini 3.1 Flash-Lite (günstig)' },
     ],
-    keyPlaceholder: 'AIza...',
-    keyHint: 'aistudio.google.com',
+    keyPlaceholder: 'AIza...', keyHint: 'aistudio.google.com',
   },
 ];
 
-function buildProviderSection(activeProvider, aiProviders) {
-  const tabs = PROVIDERS.map(p => `
-    <button class="provider-tab${p.id === activeProvider ? ' active' : ''}" data-provider="${p.id}">
-      <span class="provider-tab-logo">${p.logo}</span> ${p.label}
-    </button>`).join('');
+// Image providers (Image Studio).
+const IMAGE_PROVIDERS = [
+  {
+    id: 'openai', label: 'OpenAI', logo: '⬡',
+    models: [
+      { value: 'gpt-image-1', label: 'GPT Image 1 (empfohlen)' },
+      { value: 'dall-e-3',    label: 'DALL·E 3' },
+    ],
+    keyPlaceholder: 'sk-...', keyHint: 'platform.openai.com',
+  },
+  {
+    id: 'gemini', label: 'Google Gemini', logo: '✦',
+    models: [
+      { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (Nano-Banana)' },
+    ],
+    keyPlaceholder: 'AIza...', keyHint: 'aistudio.google.com',
+  },
+];
 
-  const panels = PROVIDERS.map(p => {
-    const cfg = aiProviders[p.id] || {};
-    const selectedModel = cfg.model || p.models[0].value;
-    const apiKey = cfg.apiKey || '';
-    return `
-      <div id="ai-provider-panel-${p.id}" class="provider-panel${p.id !== activeProvider ? ' hidden' : ''}">
-        <div class="form-group" style="margin-top:16px">
-          <label class="form-label">Aktiver Anbieter</label>
-          <div style="display:flex;align-items:center;gap:10px">
-            <input type="radio" name="ai-provider" id="ai-provider-${p.id}" value="${p.id}" ${p.id === activeProvider ? 'checked' : ''} style="accent-color:var(--primary)">
-            <label for="ai-provider-${p.id}" style="font-size:13px;cursor:pointer">${p.logo} ${p.label} als aktiven Anbieter verwenden</label>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">API-Key</label>
-          <div class="password-wrapper">
-            <input type="password" class="form-input" id="ai-key-${p.id}" value="${escHtml(apiKey)}" placeholder="${p.keyPlaceholder}" autocomplete="off">
-            <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <div class="text-xs text-muted" style="margin-top:5px">Key abrufen: ${p.keyHint}</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Modell</label>
-          <select class="form-select" id="ai-model-${p.id}">
-            ${p.models.map(m => `<option value="${m.value}" ${selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
-          </select>
-        </div>
-      </div>`;
-  }).join('');
+// Voice providers (Voice Studio — TTS).
+const VOICE_PROVIDERS = [
+  {
+    id: 'elevenlabs', label: 'ElevenLabs', logo: '◌',
+    models: [
+      { value: 'eleven_multilingual_v2', label: 'Multilingual v2 (empfohlen)' },
+      { value: 'eleven_turbo_v2_5',      label: 'Turbo v2.5 (schnell)' },
+      { value: 'eleven_flash_v2_5',      label: 'Flash v2.5 (günstig)' },
+    ],
+    keyPlaceholder: 'ElevenLabs API-Key', keyHint: 'elevenlabs.io',
+  },
+  {
+    id: 'openai', label: 'OpenAI TTS', logo: '⬡',
+    models: [
+      { value: 'tts-1',           label: 'TTS-1' },
+      { value: 'tts-1-hd',        label: 'TTS-1 HD' },
+      { value: 'gpt-4o-mini-tts', label: 'GPT-4o mini TTS' },
+    ],
+    keyPlaceholder: 'sk-...', keyHint: 'platform.openai.com',
+  },
+];
 
-  return `<div class="provider-tabs">${tabs}</div>${panels}`;
+// Music & sound providers (Music Studio).
+const MUSIC_PROVIDERS = [
+  {
+    id: 'elevenlabs', label: 'ElevenLabs', logo: '♪',
+    models: [
+      { value: 'music_v1', label: 'Music v1 (Musik & Sound-FX)' },
+    ],
+    keyPlaceholder: 'ElevenLabs API-Key', keyHint: 'elevenlabs.io',
+  },
+];
+
+// One uniform block per studio. `group` → settings keys `<group>Provider(s)`.
+const AI_STUDIOS = [
+  { key: 'presentations', label: 'Präsentationen', icon: '◈', accent: 'var(--mod-presentations)', group: 'ai',    catalog: TEXT_PROVIDERS,  def: 'anthropic' },
+  { key: 'stories',       label: 'Stories',        icon: '✎', accent: 'var(--mod-stories)',       group: 'story',  catalog: TEXT_PROVIDERS,  def: 'anthropic' },
+  { key: 'images',        label: 'Bilder',         icon: '❖', accent: 'var(--mod-images)',        group: 'image',  catalog: IMAGE_PROVIDERS, def: 'openai' },
+  { key: 'voice',         label: 'Voice',          icon: '◌', accent: 'var(--mod-voice)',         group: 'voice',  catalog: VOICE_PROVIDERS, def: 'elevenlabs' },
+  { key: 'music',         label: 'Musik & Sound',  icon: '♪', accent: 'var(--mod-music)',         group: 'music',  catalog: MUSIC_PROVIDERS, def: 'elevenlabs' },
+];
+
+// Editable in-memory state: per studio { active, providers: { id: { apiKey, model } } }.
+// Keys live per provider, so switching models keeps the key.
+const aiState = {};
+
+function providerById(catalog, id) { return catalog.find(p => p.id === id) || catalog[0]; }
+
+function initStudioState(studio, activeProvider, providersData) {
+  const active = providerById(studio.catalog, activeProvider || studio.def).id;
+  const providers = {};
+  for (const p of studio.catalog) {
+    const cfg = (providersData || {})[p.id] || {};
+    providers[p.id] = { apiKey: cfg.apiKey || '', model: cfg.model || p.models[0].value };
+  }
+  aiState[studio.key] = { active, providers };
+}
+
+function modelOptions(studio) {
+  const st = aiState[studio.key];
+  return studio.catalog.map(p => `
+    <optgroup label="${p.logo} ${escHtml(p.label)}">
+      ${p.models.map(m => {
+        const sel = (p.id === st.active && m.value === st.providers[p.id].model) ? ' selected' : '';
+        return `<option value="${p.id}::${m.value}"${sel}>${escHtml(m.label)}</option>`;
+      }).join('')}
+    </optgroup>`).join('');
+}
+
+function buildStudioSection(studio) {
+  const st = aiState[studio.key];
+  const p = providerById(studio.catalog, st.active);
+  const apiKey = st.providers[st.active].apiKey;
+  return `
+    <div class="ai-studio-section" data-studio="${studio.key}">
+      <div class="ai-studio-head"><span class="ai-studio-icon" style="color:${studio.accent}">${studio.icon}</span> ${studio.label}</div>
+      <div class="form-group">
+        <label class="form-label">Modell</label>
+        <select class="form-select" id="ai-model-${studio.key}">${modelOptions(studio)}</select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">API-Key</label>
+        <div class="password-wrapper">
+          <input type="password" class="form-input" id="ai-key-${studio.key}" value="${escHtml(apiKey)}" placeholder="${p.keyPlaceholder}" autocomplete="off">
+          <button type="button" class="password-toggle" title="Anzeigen/Verbergen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="text-xs text-muted" id="ai-keyhint-${studio.key}" style="margin-top:5px">Key abrufen: ${p.keyHint}</div>
+      </div>
+    </div>`;
+}
+
+function bindStudioSection(studio) {
+  const st = aiState[studio.key];
+  const select = document.getElementById(`ai-model-${studio.key}`);
+  const keyInput = document.getElementById(`ai-key-${studio.key}`);
+  const keyHint = document.getElementById(`ai-keyhint-${studio.key}`);
+
+  select?.addEventListener('change', () => {
+    // Persist the key currently shown before switching providers.
+    st.providers[st.active].apiKey = keyInput.value;
+    const [pid, mval] = select.value.split('::');
+    st.active = pid;
+    st.providers[pid].model = mval;
+    const p = providerById(studio.catalog, pid);
+    keyInput.value = st.providers[pid].apiKey || '';
+    keyInput.placeholder = p.keyPlaceholder;
+    keyHint.textContent = 'Key abrufen: ' + p.keyHint;
+  });
+
+  keyInput?.addEventListener('input', () => { st.providers[st.active].apiKey = keyInput.value; });
 }
 
 export async function renderAdmin(container) {
@@ -173,72 +263,28 @@ export async function renderAdmin(container) {
 
 // ─── AI Settings ──────────────────────────────────────────────────────────
 
-// Image generation providers (Creative Studio → Image Studio).
-const IMAGE_PROVIDERS = [
-  { id: 'openai', label: 'OpenAI', model: 'gpt-image-1', keyPlaceholder: 'sk-…' },
-  { id: 'gemini', label: 'Google Gemini', model: 'gemini-2.5-flash-image', keyPlaceholder: 'AIza…' },
-];
-
-function buildImageProviderSection(activeProvider, imageProviders) {
-  const rows = IMAGE_PROVIDERS.map(p => {
-    const cfg = imageProviders[p.id] || {};
-    const apiKey = cfg.apiKey || '';
-    const model = cfg.model || p.model;
-    return `
-      <div style="margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <input type="radio" name="image-provider" value="${p.id}" ${p.id === activeProvider ? 'checked' : ''} style="accent-color:var(--mod-images)">
-          <span style="font-size:13px;font-weight:600">${p.label}</span>
-          <span style="font-size:11px;color:var(--text-muted)">${escHtml(model)}</span>
-        </label>
-        <div class="password-wrapper">
-          <input type="password" class="form-input" id="image-key-${p.id}" value="${escHtml(apiKey)}" placeholder="${p.keyPlaceholder}" autocomplete="off">
-          <button type="button" class="password-toggle" data-target="image-key-${p.id}" title="Anzeigen/Verstecken">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-        </div>
-        <input type="hidden" id="image-model-${p.id}" value="${escHtml(model)}">
-      </div>`;
-  }).join('');
-  return `
-    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
-      <div class="form-label" style="margin-bottom:4px">🎨 Bild-Generierung (Creative Studio)</div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">API-Key für die Bild-Erstellung im Image Studio. Aktiven Anbieter auswählen.</p>
-      ${rows}
-    </div>`;
-}
-
 async function loadAiSettings() {
   const card = document.getElementById('ai-settings-card');
   if (!card) return;
   try {
     const data = await api.admin.aiSettings.get();
-    const activeProvider = data.aiProvider || 'anthropic';
-    const aiProviders = data.aiProviders || {};
-    const imageProvider = data.imageProvider || 'openai';
-    const imageProviders = data.imageProviders || {};
+    for (const studio of AI_STUDIOS) {
+      initStudioState(studio, data[studio.group + 'Provider'], data[studio.group + 'Providers']);
+    }
 
-    card.innerHTML = buildProviderSection(activeProvider, aiProviders)
-      + buildImageProviderSection(imageProvider, imageProviders) + `
-      <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+    card.innerHTML = `
+      <p class="text-muted text-sm" style="margin:0 0 18px">
+        Pro Studio ein eigenes Modell und einen eigenen API-Key. Keys werden je Anbieter gespeichert und bleiben beim Modellwechsel erhalten.
+      </p>
+      ${AI_STUDIOS.map(buildStudioSection).join('')}
+      <div style="display:flex;align-items:center;gap:12px;margin-top:8px;padding-top:16px;border-top:1px solid var(--border)">
         <button class="btn btn-primary btn-sm" id="ai-settings-save">Speichern</button>
         <span id="ai-settings-status" style="font-size:13px;color:var(--text-muted)"></span>
       </div>
     `;
 
     initPasswordToggles(card);
-
-    // Tab switching
-    card.querySelectorAll('.provider-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        card.querySelectorAll('.provider-tab').forEach(t => t.classList.remove('active'));
-        card.querySelectorAll('.provider-panel').forEach(p => p.classList.add('hidden'));
-        tab.classList.add('active');
-        card.getElementById?.('ai-provider-panel-' + tab.dataset.provider)?.classList.remove('hidden');
-        document.getElementById('ai-provider-panel-' + tab.dataset.provider)?.classList.remove('hidden');
-      });
-    });
-
+    AI_STUDIOS.forEach(bindStudioSection);
     document.getElementById('ai-settings-save').addEventListener('click', saveAiSettings);
   } catch (err) {
     if (card) card.innerHTML = `<p style="color:var(--danger)">${err.message}</p>`;
@@ -250,26 +296,19 @@ async function saveAiSettings() {
   const saveBtn = document.getElementById('ai-settings-save');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Speichert…'; }
 
-  const aiProvider = document.querySelector('input[name="ai-provider"]:checked')?.value || 'anthropic';
-  const aiProviders = {};
-  for (const p of PROVIDERS) {
-    aiProviders[p.id] = {
-      apiKey: document.getElementById(`ai-key-${p.id}`)?.value || '',
-      model: document.getElementById(`ai-model-${p.id}`)?.value || p.models[0].value,
-    };
-  }
-
-  const imageProvider = document.querySelector('input[name="image-provider"]:checked')?.value || 'openai';
-  const imageProviders = {};
-  for (const p of IMAGE_PROVIDERS) {
-    imageProviders[p.id] = {
-      apiKey: document.getElementById(`image-key-${p.id}`)?.value || '',
-      model: document.getElementById(`image-model-${p.id}`)?.value || p.model,
-    };
+  const payload = {};
+  for (const studio of AI_STUDIOS) {
+    const st = aiState[studio.key];
+    const providers = {};
+    for (const p of studio.catalog) {
+      providers[p.id] = { apiKey: st.providers[p.id].apiKey || '', model: st.providers[p.id].model };
+    }
+    payload[studio.group + 'Provider'] = st.active;
+    payload[studio.group + 'Providers'] = providers;
   }
 
   try {
-    await api.admin.aiSettings.update({ aiProvider, aiProviders, imageProvider, imageProviders });
+    await api.admin.aiSettings.update(payload);
     if (statusEl) { statusEl.textContent = '✓ Gespeichert'; statusEl.style.color = 'var(--success)'; }
     setTimeout(() => { if (statusEl) { statusEl.textContent = ''; } }, 2500);
   } catch (err) {
