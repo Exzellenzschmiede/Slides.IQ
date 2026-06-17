@@ -143,7 +143,8 @@ router.put('/:id', (req, res) => {
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
-    title || null, description || null,
+    title || null,
+    description === undefined ? null : description,
     tags ? JSON.stringify(tags) : null,
     brand ? JSON.stringify(brand) : null,
     req.params.id

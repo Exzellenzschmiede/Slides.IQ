@@ -748,6 +748,25 @@ body.studio-resizing iframe { pointer-events: none; }
   transform: translateX(-2px);
 }
 
+.studio-meta-edit {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.6;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all var(--transition);
+}
+.studio-meta-edit:hover {
+  opacity: 1;
+  color: var(--text);
+  background: rgba(124,58,237,0.1);
+}
+
 /* ── Studio Dropdowns ── */
 .studio-dropdown {
   position: relative;

@@ -145,8 +145,11 @@ function buildStudioHTML(p) {
     <button class="studio-back-btn" onclick="window.history.back()" title="${t('studio.backTitle')}">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <div>
-      <h1 class="view-title" style="font-size:18px" id="studio-title">${escHtml(p.title)}</h1>
+    <div style="min-width:0">
+      <div style="display:flex;align-items:center;gap:6px">
+        <h1 class="view-title" style="font-size:18px" id="studio-title">${escHtml(p.title)}</h1>
+        <button class="studio-meta-edit" id="btn-edit-meta" title="${t('studio.editMetaBtnTitle')}">✏</button>
+      </div>
       <p class="view-subtitle" id="studio-meta">${p.slide_count || 0} ${t('common.slides')} · ${t('studio.metaSlides', { count: p.slide_count || 0, date: formatDate(p.updated_at) })}</p>
     </div>
     <div class="flex gap-8" style="margin-left:auto">
@@ -516,20 +519,109 @@ async function duplicateSlide(index) {
 
 function deleteSlide(index) {
   if (isGenerating) return;
-  showConfirmModal(t('studio.confirmDeleteSlide', { index: index + 1 }), `Slide ${index + 1} wird unwiderruflich gelöscht.`, {
-    confirmLabel: 'Löschen', danger: true,
-    onConfirm: async () => {
-      try {
-        const result = await api.presentations.deleteSlide(currentPresentation.id, index);
-        currentPresentation.slide_count = result.slide_count;
-        const newIndex = Math.min(index, result.slide_count - 1);
-        await refreshAfterSlideOp(result.slide_count, newIndex);
-        toastSuccess(t('studio.slideDeleted', { index: index + 1 }));
-      } catch (err) {
-        toastError(t('common.error') + ': ' + err.message);
+  showConfirmModal(
+    t('studio.confirmDeleteSlide', { index: index + 1 }),
+    t('studio.confirmDeleteSlideBody', { index: index + 1 }),
+    {
+      confirmLabel: t('studio.delConfirmLabel'), danger: true,
+      onConfirm: async () => {
+        try {
+          const result = await api.presentations.deleteSlide(currentPresentation.id, index);
+          currentPresentation.slide_count = result.slide_count;
+          const newIndex = Math.min(index, result.slide_count - 1);
+          await refreshAfterSlideOp(result.slide_count, newIndex);
+          toastSuccess(t('studio.slideDeleted', { index: index + 1 }));
+        } catch (err) {
+          toastError(t('common.error') + ': ' + err.message);
+        }
       }
     }
-  });
+  );
+}
+
+// ─── Chat-driven slide deletion ───────────────────────────────────────────
+
+// Delete verbs across en/de/it/nl/pl.
+const DELETE_VERB = /(?:^|[\s,])(lösch\w*|entfern\w*|delete|remove|elimin\w*|cancell\w*|rimuov\w*|verwijder\w*|wis\b|usu[nń]\w*|skasuj\w*)/i;
+// Slide nouns across the same locales.
+const SLIDE_NOUN = /(folie|slide|dia\b|diapositiv|slajd)/i;
+
+// Extract 1-based slide numbers (handles "3", "3, 5", "2-4" ranges) → 0-based, sorted, unique.
+function parseSlideNumbers(text) {
+  const set = new Set();
+  for (const m of text.matchAll(/(\d+)\s*[-–]\s*(\d+)/g)) {
+    const a = +m[1], b = +m[2];
+    if (a > 0 && b >= a) for (let n = a; n <= b; n++) set.add(n - 1);
+  }
+  for (const m of text.matchAll(/\d+/g)) { const n = +m[0]; if (n > 0) set.add(n - 1); }
+  return [...set].sort((a, b) => a - b);
+}
+
+// Words that are pure scaffolding (articles, conjunctions, demonstratives) and
+// therefore don't make a delete command ambiguous with an edit.
+const DELETE_FILLER = /\b(und|and|e|en|i|oraz|of|von|the|die|der|den|das|de|la|le|il|lo|gli|los|las|this|these|that|diese[rsn]?|questa|questo|queste|questi|deze|dit|ten|te|please|bitte|prego|alsjeblieft|proszę|bis|to|t\/m|fino|do|a|als|aktuelle|current|huidige|attuale|bieżący|obecny)\b/gi;
+
+// Detect a "delete slide" chat command.
+// Returns { indices } (0-based; empty array = "the current slide") or null.
+// Outside slide-scoped mode we require an explicit slide noun + number, and we
+// reject anything with leftover content words (e.g. "entferne den Titel von
+// Folie 3") so genuine edit requests still go to the AI.
+function detectDeleteCommand(prompt, scoped = false) {
+  const text = prompt.trim().toLowerCase();
+  if (!DELETE_VERB.test(text)) return null;
+
+  const indices = parseSlideNumbers(text);
+  if (!scoped && (!SLIDE_NOUN.test(text) || !indices.length)) return null;
+
+  // Strip every recognised token; any residue means the user is targeting
+  // something inside a slide → treat as an edit, not a slide deletion.
+  const residue = text
+    .replace(DELETE_VERB, ' ')
+    .replace(/(folie|slide|dia|diapositiv|slajd)\w*/gi, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(DELETE_FILLER, ' ')
+    .replace(/[^\p{L}]+/gu, ' ')
+    .trim();
+  if (residue) return null;
+
+  return { indices };
+}
+
+function confirmChatDelete(indices) {
+  const total = currentPresentation.slide_count || 0;
+  let list = (indices.length ? indices : [currentSlideIndex])
+    .filter(i => i >= 0 && i < total);
+  list = [...new Set(list)].sort((a, b) => a - b);
+
+  if (!list.length) { toastError(t('studio.delNoSuchSlide')); return; }
+  if (list.length >= total) { toastError(t('studio.delCannotAll')); return; }
+
+  const human = list.map(i => i + 1).join(', ');
+  showConfirmModal(
+    t('studio.confirmDeleteSlides', { slides: human }),
+    t('studio.confirmDeleteSlidesBody', { slides: human }),
+    { confirmLabel: t('studio.delConfirmLabel'), danger: true, onConfirm: () => runChatDelete(list) }
+  );
+}
+
+async function runChatDelete(list) {
+  if (isGenerating) return;
+  let slideCount = currentPresentation.slide_count || 0;
+  try {
+    // Delete from highest index to lowest so earlier indices stay valid.
+    for (const idx of [...list].sort((a, b) => b - a)) {
+      const result = await api.presentations.deleteSlide(currentPresentation.id, idx);
+      slideCount = result.slide_count;
+    }
+    currentPresentation.slide_count = slideCount;
+    const newIndex = Math.max(0, Math.min(list[0], slideCount - 1));
+    await refreshAfterSlideOp(slideCount, newIndex);
+    const human = list.map(i => i + 1).join(', ');
+    showAssistantWithChips(t('studio.assistantSlidesDeleted', { slides: human, total: slideCount }));
+    toastSuccess(t('studio.slidesDeleted', { slides: human }));
+  } catch (err) {
+    toastError(t('common.error') + ': ' + err.message);
+  }
 }
 
 async function refreshAfterSlideOp(slideCount, gotoIndex = 0) {
@@ -964,7 +1056,22 @@ async function sendMessage() {
   // Route to slide-scoped edit if mode is active — no planning needed
   if (slideScopedMode && slideScopedIndex >= 0) {
     input.value = '';
+    const del = detectDeleteCommand(prompt, true);
+    if (del) {
+      addChatMessage('user', prompt);
+      confirmChatDelete(del.indices.length ? del.indices : [slideScopedIndex]);
+      return;
+    }
     streamEditSlide(slideScopedIndex, prompt);
+    return;
+  }
+
+  // Plain-chat "delete slide N" command → delete directly, no AI call needed
+  const del = detectDeleteCommand(prompt);
+  if (del) {
+    input.value = '';
+    addChatMessage('user', prompt);
+    confirmChatDelete(del.indices);
     return;
   }
 
@@ -1198,6 +1305,9 @@ function bindEvents() {
     const input = document.getElementById('chat-input');
     if (input) { input.value = chip.dataset.prompt; input.focus(); }
   });
+
+  // Edit title & description
+  document.getElementById('btn-edit-meta')?.addEventListener('click', showEditMetaModal);
 
   // Slide mode off
   document.getElementById('slide-mode-off')?.addEventListener('click', deactivateSlideScopedMode);
@@ -1601,6 +1711,54 @@ async function showTemplateChooser() {
     closeModal();
     loadTemplateInfo();
     toastSuccess(t('studio.templateApplied'));
+  });
+}
+
+// ─── Edit title & description ─────────────────────────────────────────────
+
+function showEditMetaModal() {
+  showModal(t('studio.editMetaTitle'), `
+    <div class="form-group">
+      <label class="form-label">${t('studio.metaTitleLabel')}</label>
+      <input type="text" class="form-input" id="edit-meta-title"
+        value="${escHtml(currentPresentation.title || '')}" style="width:100%" maxlength="200">
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t('studio.metaDescLabel')}</label>
+      <textarea class="form-input" id="edit-meta-desc" rows="3"
+        style="width:100%;resize:vertical">${escHtml(currentPresentation.description || '')}</textarea>
+    </div>
+    <div class="flex gap-8" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost" id="edit-meta-cancel">${t('common.cancel')}</button>
+      <button class="btn btn-primary" id="edit-meta-save">${t('common.save')}</button>
+    </div>
+  `, t('studio.editMetaSubtitle'));
+
+  const titleInput = document.getElementById('edit-meta-title');
+  setTimeout(() => { titleInput?.focus(); titleInput?.select(); }, 50);
+
+  document.getElementById('edit-meta-cancel')?.addEventListener('click', closeModal);
+
+  const save = async () => {
+    const title = document.getElementById('edit-meta-title')?.value.trim();
+    const description = document.getElementById('edit-meta-desc')?.value.trim();
+    if (!title) { toastError(t('studio.metaTitleRequired')); return; }
+    try {
+      await api.presentations.update(currentPresentation.id, { title, description });
+      currentPresentation.title = title;
+      currentPresentation.description = description;
+      const titleEl = document.getElementById('studio-title');
+      if (titleEl) titleEl.textContent = title;
+      closeModal();
+      toastSuccess(t('studio.metaSaved'));
+    } catch (err) {
+      toastError(t('common.error') + ': ' + err.message);
+    }
+  };
+
+  document.getElementById('edit-meta-save')?.addEventListener('click', save);
+  titleInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
   });
 }
 
