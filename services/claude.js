@@ -858,9 +858,7 @@ const DEFAULT_SYSTEM_PROMPT = `Erstelle visuell beeindruckende Präsentationen m
 
 // ─── Analyze PPTX and generate template ──────────────────────────────────
 
-async function analyzeTemplateFromPptx({ textContent, themeColors, slideCount }, apiKey) {
-  const anthropic = getAnthropicClient(apiKey);
-
+async function analyzeTemplateFromPptx({ textContent, themeColors, slideCount }, { provider = 'anthropic', apiKey, model } = {}) {
   const colorLines = Object.entries(themeColors)
     .filter(([k]) => !['majorFont', 'minorFont'].includes(k))
     .map(([k, v]) => `  ${k}: ${v}`)
@@ -869,9 +867,11 @@ async function analyzeTemplateFromPptx({ textContent, themeColors, slideCount },
   const fontLines = [themeColors.majorFont, themeColors.minorFont]
     .filter(Boolean).join(', ');
 
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2000,
+  const text = await aiProvider.generateText({
+    provider,
+    apiKey,
+    model,
+    json: true,
     messages: [{
       role: 'user',
       content: `Du analysierst eine PowerPoint-Präsentation (${slideCount} Folien) und erstellst daraus ein Template für glowwee.
@@ -900,7 +900,6 @@ Antworte ausschließlich als JSON (kein Markdown):
   });
 
   try {
-    const text = response.content[0].text;
     const jsonMatch = text.match(/\{[\s\S]+\}/);
     const r = JSON.parse(jsonMatch[0]);
     return {

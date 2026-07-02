@@ -8,12 +8,18 @@ const { parsePptxForTemplate } = require('../services/fileParser');
 const { analyzeTemplateFromPptx } = require('../services/claude');
 const { requireAdmin } = require('../middleware/auth');
 
-function getAnthropicKey(userId) {
+// Resolve the globally-active AI provider + key + model (same source the Studio
+// slide generation uses). Falls back to the per-user preferences row if present.
+function getActiveProvider(userId) {
   const row =
     db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(userId) ||
     db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = row ? JSON.parse(row.value) : {};
-  return prefs.aiProviders?.anthropic?.apiKey || '';
+  const provider = prefs.aiProvider || 'anthropic';
+  const providerPrefs = (prefs.aiProviders || {})[provider] || {};
+  const model = providerPrefs.model || prefs.mainModel || undefined;
+  const apiKey = providerPrefs.apiKey || '';
+  return { provider, apiKey, model };
 }
 
 const router = express.Router();
@@ -146,12 +152,12 @@ router.post('/from-pptx', (req, res, next) => {
   if (!name.toLowerCase().endsWith('.pptx')) {
     return res.status(400).json({ error: 'Nur .pptx Dateien werden unterstützt' });
   }
-  const anthropicKey = getAnthropicKey(req.session.userId);
-  if (!anthropicKey) return res.status(400).json({ error: 'PPTX-Analyse erfordert einen Anthropic API-Key in den Einstellungen.' });
+  const { provider, apiKey, model } = getActiveProvider(req.session.userId);
+  if (!apiKey) return res.status(400).json({ error: `PPTX-Analyse erfordert einen API-Key für ${provider} in den Einstellungen.` });
 
   try {
     const pptxData   = parsePptxForTemplate(req.file.buffer);
-    const suggestion = await analyzeTemplateFromPptx(pptxData, anthropicKey);
+    const suggestion = await analyzeTemplateFromPptx(pptxData, { provider, apiKey, model });
     res.json(suggestion);
   } catch (err) {
     res.status(500).json({ error: err.message });
