@@ -8,12 +8,12 @@ const { parsePptxForTemplate } = require('../services/fileParser');
 const { analyzeTemplateFromPptx } = require('../services/claude');
 const { requireAdmin } = require('../middleware/auth');
 
-// Resolve the globally-active AI provider + key + model (same source the Studio
-// slide generation uses). Falls back to the per-user preferences row if present.
-function getActiveProvider(userId) {
-  const row =
-    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ?").get(userId) ||
-    db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
+// Resolve the globally-active AI provider + key + model. AI provider config is
+// admin-managed and stored ONLY in the global preferences row (user_id ''), same
+// as the Studio slide generation reads it — a per-user preferences row (brand,
+// language, …) must NOT shadow it.
+function getActiveProvider() {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'preferences' AND user_id = ''").get();
   const prefs = row ? JSON.parse(row.value) : {};
   const provider = prefs.aiProvider || 'anthropic';
   const providerPrefs = (prefs.aiProviders || {})[provider] || {};
@@ -152,7 +152,7 @@ router.post('/from-pptx', (req, res, next) => {
   if (!name.toLowerCase().endsWith('.pptx')) {
     return res.status(400).json({ error: 'Nur .pptx Dateien werden unterstützt' });
   }
-  const { provider, apiKey, model } = getActiveProvider(req.session.userId);
+  const { provider, apiKey, model } = getActiveProvider();
   if (!apiKey) return res.status(400).json({ error: `PPTX-Analyse erfordert einen API-Key für ${provider} in den Einstellungen.` });
 
   try {
