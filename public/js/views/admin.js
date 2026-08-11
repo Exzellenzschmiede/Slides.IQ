@@ -16,19 +16,21 @@ const TEXT_PROVIDERS = [
   {
     id: 'anthropic', label: 'Anthropic Claude', logo: '◈',
     models: [
-      { value: 'claude-opus-4-8',           label: 'Claude Opus 4.8 (stärkste, 1M Kontext)' },
-      { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 (empfohlen)' },
+      { value: 'claude-opus-5',             label: 'Claude Opus 5 (stärkste, 1M Kontext)' },
+      { value: 'claude-sonnet-5',           label: 'Claude Sonnet 5 (empfohlen)' },
       { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (schnell)' },
+      { value: 'claude-opus-4-8',           label: 'Claude Opus 4.8 (älter)' },
+      { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6 (älter)' },
     ],
     keyPlaceholder: 'sk-ant-...', keyHint: 'console.anthropic.com',
   },
   {
     id: 'openai', label: 'OpenAI ChatGPT', logo: '⬡',
     models: [
-      { value: 'gpt-5.5',      label: 'GPT-5.5 (aktuell, empfohlen)' },
-      { value: 'gpt-5.4',      label: 'GPT-5.4' },
-      { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (schnell)' },
-      { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (günstig)' },
+      { value: 'gpt-5.6-sol',   label: 'GPT-5.6 Sol (stärkste)' },
+      { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra (empfohlen)' },
+      { value: 'gpt-5.6-luna',  label: 'GPT-5.6 Luna (günstig)' },
+      { value: 'gpt-5.5',       label: 'GPT-5.5 (älter)' },
     ],
     keyPlaceholder: 'sk-...', keyHint: 'platform.openai.com',
   },
@@ -46,8 +48,9 @@ const TEXT_PROVIDERS = [
     id: 'gemini', label: 'Google Gemini', logo: '✦',
     models: [
       { value: 'gemini-3.1-pro-preview',  label: 'Gemini 3.1 Pro (stärkste, Reasoning)' },
-      { value: 'gemini-3.5-flash',        label: 'Gemini 3.5 Flash (empfohlen)' },
-      { value: 'gemini-3.1-flash-lite',   label: 'Gemini 3.1 Flash-Lite (günstig)' },
+      { value: 'gemini-3.6-flash',        label: 'Gemini 3.6 Flash (empfohlen)' },
+      { value: 'gemini-3.5-flash-lite',   label: 'Gemini 3.5 Flash-Lite (günstig)' },
+      { value: 'gemini-3.5-flash',        label: 'Gemini 3.5 Flash (älter)' },
     ],
     keyPlaceholder: 'AIza...', keyHint: 'aistudio.google.com',
   },
@@ -66,7 +69,8 @@ const IMAGE_PROVIDERS = [
   {
     id: 'gemini', label: 'Google Gemini', logo: '✦',
     models: [
-      { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (Nano-Banana)' },
+      { value: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Flash Image (Nano Banana 2)' },
+      { value: 'gemini-3-pro-image',     label: 'Gemini 3 Pro Image (Nano Banana Pro)' },
     ],
     keyPlaceholder: 'AIza...', keyHint: 'aistudio.google.com',
   },

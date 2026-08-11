@@ -27,7 +27,7 @@ function getProviderSettings() {
   const prefs = getGlobalPrefs();
   const provider = prefs.aiProvider || 'anthropic';
   const providerPrefs = (prefs.aiProviders || {})[provider] || {};
-  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-4-6';
+  const model = providerPrefs.model || prefs.mainModel || 'claude-sonnet-5';
   const apiKey = providerPrefs.apiKey || '';
   return { provider, model, apiKey };
 }

@@ -7,7 +7,7 @@
 
 const DEFAULT_IMAGE_MODELS = {
   openai: 'gpt-image-1',
-  gemini: 'gemini-2.5-flash-image',
+  gemini: 'gemini-3.1-flash-image',
 };
 
 // Aspect ratio → provider-native size string (OpenAI gpt-image-1 supports

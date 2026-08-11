@@ -5,10 +5,10 @@ const Anthropic = require('@anthropic-ai/sdk');
 // ─── Default models per provider ─────────────────────────────────────────────
 
 const DEFAULT_MODELS = {
-  anthropic: 'claude-sonnet-4-6',
-  openai:    'gpt-5.5',
+  anthropic: 'claude-sonnet-5',
+  openai:    'gpt-5.6-terra',
   mistral:   'mistral-large-latest',
-  gemini:    'gemini-3.5-flash',
+  gemini:    'gemini-3.6-flash',
 };
 
 // ─── Helper: parse SSE stream from a fetch Response ──────────────────────────

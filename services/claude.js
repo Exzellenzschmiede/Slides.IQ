@@ -546,7 +546,7 @@ function renderOutlineSpec(outline) {
   return `Umzusetzende Gliederung — der Nutzer hat sie bestätigt. Halte EXAKT diese Reihenfolge, Folientitel und Inhalte ein (eine Folie pro Punkt, die Stichpunkte als Inhalt der Folie ausarbeiten):\n${lines}`;
 }
 
-async function generatePresentation({ prompt, plan = null, conversation = [], templateSystemPrompt, templateTheme, attachments = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey }, onChunk) {
+async function generatePresentation({ prompt, plan = null, conversation = [], templateSystemPrompt, templateTheme, attachments = [], model = 'claude-sonnet-5', provider = 'anthropic', apiKey }, onChunk) {
   const sysPrompt = buildSystemPrompt(templateSystemPrompt || DEFAULT_SYSTEM_PROMPT, templateTheme);
 
   // If a confirmed plan outline exists, prepend it to guide generation.
@@ -1048,7 +1048,7 @@ function normalizeOutline(outline) {
 
 // ─── Generate / edit a single slide ──────────────────────────────────────
 
-async function generateSingleSlide({ prompt, slideHtml = '', cssContext = '', surroundingSlides = [], model = 'claude-sonnet-4-6', provider = 'anthropic', apiKey, mode = 'edit' }, onChunk) {
+async function generateSingleSlide({ prompt, slideHtml = '', cssContext = '', surroundingSlides = [], model = 'claude-sonnet-5', provider = 'anthropic', apiKey, mode = 'edit' }, onChunk) {
   const cssSection = cssContext
     ? `\n\nVorhandenes CSS der Präsentation (Stil beibehalten):\n<css>\n${cssContext}\n</css>`
     : '';
